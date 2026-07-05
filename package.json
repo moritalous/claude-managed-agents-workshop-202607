@@ -1,7 +1,8 @@
 {
-  "name": "cyan-cycle",
+  "name": "claude-managed-agents-workshop-202607",
   "type": "module",
   "version": "0.0.1",
+  "license": "CC-BY-NC-ND-4.0",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
