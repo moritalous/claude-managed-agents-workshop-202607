@@ -1,0 +1,386 @@
+---
+title: 3. Create an Agent with the SDK
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+We will create an agent using Python and the Claude SDK (the `anthropic` package). We use `uv` for the Python runtime environment throughout.
+
+<Aside>
+For authentication, the SDK automatically uses the login credentials from `ant auth login` in [2. Create an Agent with the CLI](/en/intermediate/02_ant/), so no setup is needed on this page. If you want to authenticate with an API key, see [4. Appendix: Issuing and Using API Keys](/en/intermediate/04_apikey/).
+</Aside>
+
+<Aside>
+All the code on this page makes calls through `beta`, as in `client.beta.vaults.create(...)`. For the same reason that the CLI commands started with `beta:`, the Managed Agents API, which is provided as a beta, is separated into the `client.beta` namespace in the SDK. Calling through `beta` is how you opt in to the beta, and the SDK sends the required `anthropic-beta: managed-agents-2026-04-01` header for you.
+</Aside>
+
+## 1. Install uv
+
+<Steps>
+
+1. Install [uv](https://docs.astral.sh/uv/).
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    Run the following command in PowerShell.
+
+    ```shell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    Run the following command in the terminal.
+
+    ```shell
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. **Reopen** your terminal (or PowerShell), then verify the installation.
+
+    ```shell
+    uv --version
+    ```
+
+    If a version such as `uv 0.11.6` is displayed, you are all set.
+
+</Steps>
+
+## 2. Create a Project
+
+<Steps>
+
+1. Create a project and move into its folder.
+
+    ```shell
+    uv init jina-research-agent
+    cd jina-research-agent
+    ```
+
+1. Install the Claude SDK.
+
+    ```shell
+    uv add anthropic
+    ```
+
+</Steps>
+
+## 3. Create the Resources
+
+The credential vault, environment, and agent are "create once, reuse forever" resources, so we put their creation in a dedicated script. The contents are the same as what we created through the UI in [1. Create an Agent in the Console](/en/intermediate/01_console/), with "-sdk" appended to the names.
+
+<Steps>
+
+1. Create `setup.py` in the project folder and save the following content. Replace the `Your Jina AI API key here` part with your actual API key.
+
+    ```python title="setup.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. Create a credential vault
+    ###############################
+    vault = client.beta.vaults.create(display_name="Vault-sdk")
+    print(f"vault:       {vault.id}")
+
+    ###############################
+    # 2. Add the Jina AI API key to the vault
+    ###############################
+    credential = client.beta.vaults.credentials.create(
+        vault_id=vault.id,
+        display_name="Jina-ai-sdk",
+        auth={
+            "type": "static_bearer",
+            "mcp_server_url": "https://mcp.jina.ai/v1",
+            "token": "Your Jina AI API key here",
+        },
+    )
+    print(f"credential:  {credential.id}")
+
+    ###############################
+    # 3. Create an environment (allow network access to MCP servers)
+    ###############################
+    environment = client.beta.environments.create(
+        name="Jina-environment-sdk",
+        config={
+            "type": "cloud",
+            "networking": {"type": "limited", "allow_mcp_servers": True},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 4. Create an agent
+    ###############################
+    agent = client.beta.agents.create(
+        name="Jina Web Research Agent SDK",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="A demo agent for web search, page reading, and academic research using Jina AI's MCP server.",
+        system="You are a research assistant that leverages Jina AI's search and reading tools. When you receive a question, use search_web (or search_arxiv or search_ssrn for academic topics) to find relevant sources, then use read_url or parallel_read_url to retrieve the full text of promising results. Do not rely on search result snippets alone. Combine information from multiple sources, cite the URLs you used, and clearly indicate any uncertainties or conflicting information. For efficiency, prefer the parallel_* tools when searching or reading multiple sources at once. If asked to summarize or extract facts from a specific page, read that page directly with read_url. Keep your answers concise and well organized, and base them on the retrieved content rather than prior knowledge.",
+        mcp_servers=[{"name": "jina", "type": "url", "url": "https://mcp.jina.ai/v1"}],
+        tools=[
+            {
+                "type": "mcp_toolset",
+                "mcp_server_name": "jina",
+                "default_config": {
+                    "enabled": True,
+                    "permission_policy": {"type": "always_allow"},
+                },
+            }
+        ],
+    )
+    print(f"agent:       {agent.id}")
+
+    ###############################
+    # Save the created IDs to a file (used by run.py)
+    ###############################
+    with open("ids.json", "w") as f:
+        json.dump(
+            {
+                "vault_id": vault.id,
+                "environment_id": environment.id,
+                "agent_id": agent.id,
+            },
+            f,
+            indent=2,
+        )
+    print("Saved IDs to ids.json")
+    ```
+
+1. Run the script.
+
+    ```shell
+    uv run setup.py
+    ```
+
+    The IDs of the created resources are displayed as follows.
+
+    ```text
+    vault:       vlt_011Cci1zcUettnGhV6NQabv9
+    credential:  vcrd_012oihCmwZH95gkNgf4Pix3e
+    environment: env_018fgtuvYobdrA98ty299UpD
+    agent:       agent_018ZmPdCappkAQ5g3nc444To
+    Saved IDs to ids.json
+    ```
+
+    <Aside type="caution">
+    The basic pattern for agents is "create once, then reference by ID afterward." This script saves the IDs to `ids.json`, which the next script loads and uses. Run `setup.py` only once (running it again will fail with a duplicate environment name error).
+    </Aside>
+
+</Steps>
+
+## 4. Invoke the Agent
+
+Creating a session and interacting with the agent go into a script you use on every run.
+
+<Steps>
+
+1. Create `run.py` in the project folder and save the following content.
+
+    ```python title="run.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # Load the IDs saved by setup.py
+    ###############################
+    with open("ids.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # 1. Create a session (combining the agent, environment, and vault)
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+        vault_ids=[ids["vault_id"]],
+    )
+    print(f"session: {session.id}")
+
+    ###############################
+    # 2. Open the event stream first (so no events are missed)
+    ###############################
+    stream = client.beta.sessions.events.stream(session_id=session.id)
+
+    ###############################
+    # 3. Send a message
+    ###############################
+    client.beta.sessions.events.send(
+        session.id,
+        events=[
+            {
+                "type": "user.message",
+                "content": [{"type": "text", "text": "Search for the latest papers on RAG"}],
+            }
+        ],
+    )
+    print("Message sent. Waiting for a response...\n")
+
+    ###############################
+    # 4. Display events as they are received
+    ###############################
+    for event in stream:
+        if event.type == "agent.mcp_tool_use":
+            print(f"[Tool call: {event.name}]")
+        elif event.type == "agent.message":
+            for block in event.content:
+                if block.type == "text":
+                    print(block.text)
+        elif event.type == "session.status_idle":
+            if event.stop_reason.type != "requires_action":
+                break
+        elif event.type == "session.status_terminated":
+            break
+
+    stream.close()
+    print("\nDone")
+    ```
+
+    <Aside>
+    Only events that occur after you connect flow through the stream, so the key point is to **open the stream first, then send the message**. Receiving ends once the agent is waiting for input (`session.status_idle`).
+    </Aside>
+
+1. Run the script.
+
+    ```shell
+    uv run run.py
+    ```
+
+    Following the tool calls, the answer is displayed in real time (this takes about a minute).
+
+    ```text
+    session: sesn_01CCczZDALAHspEXUqx9rhFQ
+    Message sent. Waiting for a response...
+
+    [Tool call: search_arxiv]
+    I found the latest RAG-related papers. ...
+
+    ## Latest RAG-Related Papers (Published June 2026)
+
+    1. **TA-RAG: Tone-Aware Retrieval-Augmented Generation for Peer** (2606.06794)
+       - A lightweight framework that incorporates tone control into the RAG pipeline
+    ...
+
+    Done
+    ```
+
+1. Running `run.py` again starts a new session with the same agent. Try changing the message content. You can also review the resources you created and the session exchanges from the corresponding menus in the console.
+
+</Steps>
+
+## 5. Continue the Conversation
+
+`run.py` ends after a single exchange, but sessions are stateful, so **if you keep sending messages to the same session, the conversation continues**. Let's build an interactive version.
+
+<Steps>
+
+1. Create `chat.py` in the project folder and save the following content.
+
+    ```python title="chat.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # Load the IDs saved by setup.py
+    ###############################
+    with open("ids.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # Create only one session at the start (keep sending to the same session to continue the conversation)
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+        vault_ids=[ids["vault_id"]],
+    )
+    print(f"session: {session.id}")
+    print("Chat with the agent. Type exit to quit.\n")
+
+    while True:
+        user_input = input("You> ").strip()
+        if user_input == "exit":
+            break
+        if not user_input:
+            continue
+
+        ###############################
+        # Open the stream, then send the message
+        ###############################
+        stream = client.beta.sessions.events.stream(session_id=session.id)
+        client.beta.sessions.events.send(
+            session.id,
+            events=[
+                {
+                    "type": "user.message",
+                    "content": [{"type": "text", "text": user_input}],
+                }
+            ],
+        )
+
+        ###############################
+        # Display events until the agent is waiting for input
+        ###############################
+        for event in stream:
+            if event.type == "agent.mcp_tool_use":
+                print(f"[Tool call: {event.name}]")
+            elif event.type == "agent.message":
+                for block in event.content:
+                    if block.type == "text":
+                        print(block.text)
+            elif event.type == "session.status_idle":
+                if event.stop_reason.type != "requires_action":
+                    break
+            elif event.type == "session.status_terminated":
+                break
+        stream.close()
+        print()
+    ```
+
+    <Aside>
+    The session is created only once, **outside** the loop, and each turn repeats "open the stream, send, receive until the agent is waiting for input." The conversation history is stored on the session side, so there is no need to manage history on the client.
+    </Aside>
+
+1. Run the script and ask follow-up questions. You can confirm that it remembers the previous exchange.
+
+    ```shell
+    uv run chat.py
+    ```
+
+    ```text
+    session: sesn_01UDB8UgiKxoFr1myDyGfjf2
+    Chat with the agent. Type exit to quit.
+
+    You> Hello
+    Hello.
+
+    You> Do you remember the first message I sent?
+    Yes, it was your greeting, "Hello."
+
+    You> exit
+    ```
+
+</Steps>
+
+## Summary
+
+- We built the same setup as the console and CLI, this time with the Python SDK.
+- The basic pattern is to split resource creation (`setup.py`) from execution (`run.py`) into separate scripts and hand off the IDs via `ids.json`.
+- For events, **open the stream first, then send**, and finish receiving on `session.status_idle`.
+- Sessions are stateful, so simply keep sending to the same session to continue the conversation (`chat.py`). No history management is needed on the client side.
+
+<ShareOnX />

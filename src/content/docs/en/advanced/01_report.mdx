@@ -1,0 +1,219 @@
+---
+title: 1. Analysis Report Agent
+description: Build an agent that goes from data analysis to slide creation and download, using the sandbox's built-in tools and the pptx skill.
+sidebar:
+  order: 1
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+We will build an agent that analyzes data and produces a slide (PPTX) report. The uv and authentication setup is the same as in [3. Create an Agent with the SDK](/en/intermediate/03_sdk/); we will create a new project for this page and work from there.
+
+On this page, we will use the following Managed Agents features for the first time.
+
+| Feature | Role |
+|------|------|
+| Built-in tools (`agent_toolset`) | A set of tools for running bash, file operations, web search, and more inside the sandbox |
+| Environment `packages` | Configuration that pre-installs apt, pip, and npm packages into the sandbox |
+| Skills (`skills`) | A mechanism for teaching the agent specialized workflows such as document creation |
+| Session outputs | A mechanism for downloading files the agent saved to `/mnt/session/outputs/` to your local machine |
+
+## 1. Create a Project
+
+Create a project, move into its folder, and install the Claude SDK.
+
+```shell
+uv init report-agent
+cd report-agent
+uv add anthropic
+```
+
+## 2. Create the Resources
+
+<Steps>
+
+1. Create `setup_report.py` in the project folder and save the following content.
+
+    ```python title="setup_report.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. Create the environment (pre-install the pptx skill's dependencies)
+    ###############################
+    environment = client.beta.environments.create(
+        name="Report-environment-adv",
+        config={
+            "type": "cloud",
+            "packages": {
+                "apt": ["libreoffice-impress", "poppler-utils", "fonts-noto-cjk"],
+                "pip": ["markitdown[pptx]", "Pillow"],
+                "npm": ["pptxgenjs"],
+            },
+            "networking": {"type": "unrestricted"},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 2. Create the agent (full built-in toolset + pptx skill)
+    ###############################
+    agent = client.beta.agents.create(
+        name="Report Agent ADV",
+        model="claude-sonnet-5",
+        description="An agent that performs data analysis and creates slide reports.",
+        system="You are a data analysis and report creation assistant. Use the sandbox's bash and Python for analysis, and follow the pptx skill for slide creation. Always save deliverables to /mnt/session/outputs/.",
+        tools=[{"type": "agent_toolset_20260401", "default_config": {"enabled": True}}],
+        skills=[{"type": "anthropic", "skill_id": "pptx"}],
+    )
+    print(f"agent:       {agent.id}")
+
+    with open("ids_report.json", "w") as f:
+        json.dump({"environment_id": environment.id, "agent_id": agent.id}, f, indent=2)
+    print("Saved IDs to ids_report.json")
+    ```
+
+    There are three key points in this configuration.
+
+    - **`packages`** — Pre-installs the dependencies required by the [pptx skill definition](https://github.com/anthropics/skills/blob/main/skills/pptx/SKILL.md) (LibreOffice, Poppler, markitdown, pptxgenjs) plus Japanese fonts. apt, cargo, gem, go, npm, and pip are supported, and packages are cached across sessions that use the same environment
+    - **`agent_toolset_20260401`** — The full set of built-in tools: bash, read/write/edit, glob/grep, and web search/fetch. Unlike the MCP tools we used so far, these run inside the sandbox
+    - **`skills`** — Anthropic's prebuilt skills (`pptx`, plus `xlsx`, `docx`, and `pdf`) can be used simply by specifying a `skill_id`
+
+1. Run the script.
+
+    ```shell
+    uv run setup_report.py
+    ```
+
+</Steps>
+
+## 3. Have the Agent Create a Report
+
+<Steps>
+
+1. Create `report.py` in the project folder and save the following content.
+
+    ```python title="report.py"
+    import json
+    import pathlib
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_report.json") as f:
+        ids = json.load(f)
+
+    # Create a session
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+    )
+    print(f"session: {session.id}")
+
+    # Open the stream before sending the task
+    stream = client.beta.sessions.events.stream(session_id=session.id)
+
+    client.beta.sessions.events.send(
+        session.id,
+        events=[
+            {
+                "type": "user.message",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "Create a CSV of one year of monthly sales data (units sold and revenue) "
+                            "for a fictional takoyaki shop, and analyze the trends. Then turn the "
+                            "results into a 3-slide PPTX report consisting of a title slide, a sales "
+                            "trend chart, and an analysis summary, and save it to "
+                            "/mnt/session/outputs/report.pptx."
+                        ),
+                    }
+                ],
+            }
+        ],
+    )
+    print("Task sent. This will take a few minutes to complete...\n")
+
+    for event in stream:
+        if event.type == "agent.tool_use":
+            print(f"[tool: {event.name}]")
+        elif event.type == "agent.message":
+            for block in event.content:
+                if block.type == "text":
+                    print(block.text)
+        elif event.type == "session.status_idle":
+            if event.stop_reason.type != "requires_action":
+                break
+        elif event.type == "session.status_terminated":
+            break
+    stream.close()
+
+    # Download the deliverables
+    print("\nChecking the deliverables...")
+    files = client.beta.files.list(
+        scope_id=session.id,
+        betas=["managed-agents-2026-04-01"],
+    )
+    for f in files.data:
+        print(f"- {f.filename} ({f.size_bytes} bytes)")
+        content = client.beta.files.download(f.id)
+        out = pathlib.Path(f.filename).name
+        content.write_to_file(out)
+        print(f"  -> saved to {out}")
+    ```
+
+    The final block downloads the deliverables. Files the agent saved to `/mnt/session/outputs/` can be listed and downloaded with the Files API by passing the session ID as `scope_id`.
+
+1. Run the script. The first run takes about 5-10 minutes for sandbox preparation (installing LibreOffice and other packages) and slide creation.
+
+    ```shell
+    uv run report.py
+    ```
+
+    ```text
+    session: sesn_016pxZpFV5ny8Wj14fU2wVgD
+    Task sent. This will take a few minutes to complete...
+
+    [tool: bash]
+    The data looks good. Next, I will run the analysis.
+    [tool: bash]
+    pptxgenjs is available. I will create the slides with a color palette that suits a takoyaki shop.
+    [tool: write]
+    [tool: bash]
+    Running content QA and visual QA.
+    ...
+    I will fix two issues: the line chart interpolation (lineSmooth) exaggerates the data, and the gold text on slide 3 has weak contrast.
+    [tool: edit]
+    ...
+    I have created the following deliverables.
+    ...
+
+    Checking the deliverables...
+    - report.pptx (26240 bytes)
+      -> saved to report.pptx
+    - takoyaki_monthly_sales.csv (344 bytes)
+      -> saved to takoyaki_monthly_sales.csv
+    ```
+
+    <Aside type="tip">
+    Watching the logs, you can see the agent convert the slides to images, inspect them with its own eyes, and find and fix issues on its own, such as "the chart exaggerates the data" or "the text contrast is weak". Viewing the trace on the session page in the console is also recommended.
+    </Aside>
+
+1. Open the downloaded `report.pptx` in PowerPoint or a similar app and check the result.
+
+</Steps>
+
+## Summary
+
+- The environment's `packages` setting lets you pre-install apt, pip, and npm packages into the sandbox (cached across sessions that use the same environment).
+- Enabling the built-in tools (`agent_toolset`) lets the agent run bash and file operations inside the sandbox.
+- **Skills** let you teach the agent specialized workflows like slide creation just by specifying a `skill_id`.
+- Deliverables the agent saved to `/mnt/session/outputs/` can be listed and downloaded via the Files API by passing the session ID as `scope_id`.
+
+<ShareOnX />

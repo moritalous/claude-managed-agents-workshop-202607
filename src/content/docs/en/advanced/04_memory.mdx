@@ -1,0 +1,304 @@
+---
+title: 4. An Agent That Remembers
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+Sessions are essentially disposable: once a session ends, the conversation does not carry over to the next one. With a **memory store**, an agent can retain memories across sessions. On this page, you will build a personal assistant that remembers things about you.
+
+This page introduces the following Managed Agents building blocks.
+
+| Element | Role |
+|------|------|
+| Memory store | A place for the agent's text files that persists across sessions |
+| Memory store resource attachment | The mechanism that mounts a store into the sandbox via `resources` at session creation time |
+
+## 1. Create a Project
+
+Create a project, move into its folder, and install the Claude SDK.
+
+```shell
+uv init memory-agent
+cd memory-agent
+uv add anthropic
+```
+
+## 2. Create the Resources
+
+<Steps>
+
+1. Create `setup_memory.py` in the project folder and save the following content.
+
+    ```python title="setup_memory.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. Create a memory store (the description is passed to the agent)
+    ###############################
+    store = client.beta.memory_stores.create(
+        name="personal-memory",
+        description="Memories about the user. Store their name, preferences, work context, past requests, and so on.",
+    )
+    print(f"memory_store: {store.id}")
+
+    ###############################
+    # 2. Create an environment (a minimal setup with no MCP servers or packages)
+    ###############################
+    environment = client.beta.environments.create(
+        name="Memory-environment",
+        config={"type": "cloud"},
+    )
+    print(f"environment:  {environment.id}")
+
+    ###############################
+    # 3. Create the agent (reading/writing memory requires the built-in tools)
+    ###############################
+    agent = client.beta.agents.create(
+        name="Memory Agent",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="A personal assistant that remembers the user.",
+        system=(
+            "You are the user's dedicated personal assistant. "
+            "Whenever you learn something about the user during a conversation (their name, preferences, "
+            "work context, patterns in their requests, etc.), use the write tool to save it as a Markdown file "
+            "under the memory directory (/mnt/memory/) — even without being asked. "
+            "Nothing counts as \"recorded\" until it has been written to a file. "
+            "Also, before working on any request, always read the contents of the memory directory "
+            "and tailor your response to the user. "
+            "Respond in English."
+        ),
+        tools=[{"type": "agent_toolset_20260401", "default_config": {"enabled": True}}],
+    )
+    print(f"agent:        {agent.id}")
+
+    with open("ids_memory.json", "w") as f:
+        json.dump(
+            {
+                "memory_store_id": store.id,
+                "environment_id": environment.id,
+                "agent_id": agent.id,
+            },
+            f,
+            indent=2,
+        )
+    print("Saved IDs to ids_memory.json")
+    ```
+
+    There are three key points here.
+
+    - **The memory store's `description` is passed to the agent.** Write "what these memories are for" with the agent, not a human, as the audience
+    - Memory is **mounted as files** in the sandbox, so reading and writing it requires the **built-in tools** (`agent_toolset`)
+    - The environment is a minimal setup with no networking configuration and no packages. Memory needs no external access
+
+    <Aside type="tip">
+    The line in the system prompt — "**Nothing counts as 'recorded' until it has been written to a file**" — is important. It is not a behavior documented in the official docs, but without it the agent would sometimes reply "I've recorded that" while never actually writing the file. Once we made it explicit that recording means writing a file, the agent wrote reliably.
+    </Aside>
+
+1. Run the script.
+
+    ```shell
+    uv run setup_memory.py
+    ```
+
+</Steps>
+
+## 3. Teach It and Let It Remember
+
+<Steps>
+
+1. Create `chat_memory.py` in the project folder and save the following content.
+
+    ```python title="chat_memory.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_memory.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # 1. Create a session (attach the memory store as a resource)
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+        resources=[
+            {
+                "type": "memory_store",
+                "memory_store_id": ids["memory_store_id"],
+                "access": "read_write",
+                "instructions": "Memories about the user. Record facts and preferences you learn in conversation, even without being told to. Always check them before working on a request.",
+            }
+        ],
+    )
+    print(f"session: {session.id}")
+    print("Chatting with the agent. Type exit to quit.\n")
+
+
+    ###############################
+    # 2. Send and receive one turn
+    ###############################
+    def run_turn(text: str) -> None:
+        stream = client.beta.sessions.events.stream(session_id=session.id)
+        client.beta.sessions.events.send(
+            session.id,
+            events=[{"type": "user.message", "content": [{"type": "text", "text": text}]}],
+        )
+        for event in stream:
+            if event.type == "agent.tool_use":
+                print(f"[tool: {event.name}]")
+            elif event.type == "agent.message":
+                for block in event.content:
+                    if block.type == "text":
+                        print(block.text)
+            elif event.type == "session.status_idle":
+                if event.stop_reason.type != "requires_action":
+                    break
+            elif event.type == "session.status_terminated":
+                break
+        stream.close()
+
+
+    ###############################
+    # 3. Conversation loop
+    ###############################
+    while True:
+        user_input = input("You> ").strip()
+        if user_input == "exit":
+            break
+        if not user_input:
+            continue
+        run_turn(user_input)
+        print()
+
+    print("Done")
+    ```
+
+    You attach a memory store via `resources` when creating the session. `access` can be `read_write` (read and write) or `read_only` (reference only), and `instructions` tells the agent how to use the store in this session. The attached store is mounted at `/mnt/memory/<store name>/` in the sandbox, and the mount information is automatically added to the system prompt.
+
+1. Run the script and introduce yourself — **without saying "remember this"**. If `[tool: write]` appears, that is proof the agent wrote to memory on its own initiative.
+
+    ```shell
+    uv run chat_memory.py
+    ```
+
+    ```text
+    session: sesn_01V6uP82wu7cjWHdghEyiCH2
+    Chatting with the agent. Type exit to quit.
+
+    You> I'm Yamada. I work as an engineer in Osaka. When I ask for writing, I prefer concise bullet points.
+    [tool: write]
+    Nice to meet you, Yamada! Thanks for the introduction.
+
+    So you work as an engineer in Osaka, and you prefer concise, bullet-point writing when you request
+    documents — understood. I'll keep that in mind for your future requests.
+
+    You> exit
+    Done
+    ```
+
+</Steps>
+
+## 4. Verify in a New Session
+
+<Steps>
+
+1. Run `chat_memory.py` **again**. This is a brand-new session (no conversation history), yet the agent reads its memory before responding.
+
+    ```shell
+    uv run chat_memory.py
+    ```
+
+    ```text
+    session: sesn_016XtdU3RLZB34ydhRnZkrAD
+    Chatting with the agent. Type exit to quit.
+
+    You> Write an announcement for an internal study session, in the format I prefer.
+    Let me check my memory to see your preferences before drafting the announcement.
+    [tool: bash]
+    [tool: read]
+    Thanks. You prefer a concise, bullet-point format. Here are a few versions of the
+    internal study session announcement.
+
+    ## Option 1: Simple
+
+    **[Internal Study Session Announcement]**
+
+    - **Topic**: (enter the topic)
+    - **Date & time**: Day, Month DD, YYYY, HH:MM–HH:MM
+    ...
+    ```
+
+    The agent remembers the "concise bullet points" preference you shared in the previous session and writes in that format. Conversation history is independent per session, but **memory is persisted in the store, so it carries over across sessions** — that is the key point.
+
+</Steps>
+
+## 5. Peek Inside the Memory
+
+You can inspect what the agent has remembered from the host side via the API.
+
+<Steps>
+
+1. Create `peek_memory.py` in the project folder and run it.
+
+    ```python title="peek_memory.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_memory.json") as f:
+        ids = json.load(f)
+
+    store_id = ids["memory_store_id"]
+
+    # List the memories in the store and print each one's contents
+    for item in client.beta.memory_stores.memories.list(store_id, path_prefix="/"):
+        if item.type != "memory":
+            continue
+        memory = client.beta.memory_stores.memories.retrieve(item.id, memory_store_id=store_id)
+        print(f"===== {memory.path} =====")
+        print(memory.content)
+        print()
+    ```
+
+    ```shell
+    uv run peek_memory.py
+    ```
+
+    ```text
+    ===== /user_profile.md =====
+    # User Profile
+
+    ## Basics
+    - Name: Yamada
+    - Occupation: Engineer
+    - Location: Osaka
+
+    ## Preferences & style
+    - Writing requests: prefers concise bullet points
+    ```
+
+    The agent's "memory" is really **just Markdown files**. From the host side you can also modify them with `memories.update` or remove them with `memories.delete`. In addition, every change to memory is recorded as a **version**, so you can audit when, and by which session, something was written.
+
+</Steps>
+
+## Summary
+
+- Attach a **memory store** via the session's `resources` and it is mounted as files under `/mnt/memory/`, where the agent reads and writes it with the built-in tools. What it writes is persisted in the store and **carries over to the next session**.
+- To make the agent record things on its own initiative, the reliable approach is to **state explicitly in the prompt that nothing counts as recorded until it is written to a file**.
+- Memories are really just Markdown files; from the host side you can view, modify, and delete them via the API, and audit the change history (versions).
+
+<Aside type="caution">
+`read_write` memory is convenient, but if the agent handles untrusted input (such as web page content), prompt injection could **write malicious content into memory that later sessions then trust**. For stores that are only referenced, the [official documentation](https://platform.claude.com/docs/en/managed-agents/memory) recommends attaching them as `read_only`. Also note the limits: 100 kB per memory, 2,000 memories per store, and 8 stores per session.
+</Aside>
+
+<ShareOnX />

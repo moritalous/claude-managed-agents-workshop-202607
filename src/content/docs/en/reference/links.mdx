@@ -1,0 +1,33 @@
+---
+title: Links & Next Steps
+description: Links to the official documentation, plus tools and communities for continuing development.
+sidebar:
+  order: 2
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+## Official Documentation
+
+<CardGrid>
+	<LinkCard title="Managed Agents Overview" href="https://platform.claude.com/docs/en/managed-agents/overview" description="Start here. The official Managed Agents documentation." />
+	<LinkCard title="Quickstart" href="https://platform.claude.com/docs/en/managed-agents/quickstart" description="The official tutorial that today's hands-on session was based on." />
+	<LinkCard title="Defining Agents" href="https://platform.claude.com/docs/en/managed-agents/agent-setup" description="The lifecycle of versioning, updating, and archiving." />
+	<LinkCard title="Tools" href="https://platform.claude.com/docs/en/managed-agents/tools" description="Configuring built-in tools, custom tools, and permission policies." />
+	<LinkCard title="Environments" href="https://platform.claude.com/docs/en/managed-agents/environments" description="packages and networking settings, self-hosted sandboxes." />
+	<LinkCard title="Events and Streaming" href="https://platform.claude.com/docs/en/managed-agents/events-and-streaming" description="The full list of event types, plus details on reconnection and interruption." />
+	<LinkCard title="Scheduled Deployments" href="https://platform.claude.com/docs/en/managed-agents/scheduled-deployments" description="Recurring runs on a cron schedule." />
+	<LinkCard title="Memory" href="https://platform.claude.com/docs/en/managed-agents/memory" description="Give agents memory across sessions with the memory store." />
+	<LinkCard title="Reference" href="https://platform.claude.com/docs/en/managed-agents/reference" description="Tables of event types, rate limits, and more." />
+</CardGrid>
+
+## Tools for Continuing Development
+
+- **Start from Claude Code** — run `/claude-api managed-agents-onboard` in the latest Claude Code and it will guide you through agent setup interactively
+- **Anthropic CLI (`ant`)** — handy for a workflow where you define agents and environments in YAML and keep them under version control. [CLI documentation](https://platform.claude.com/docs/en/api/sdks/cli)
+- **SDKs beyond Python** — you can do the same in TypeScript / Java / Go / C# / Ruby / PHP. The [Quickstart](https://platform.claude.com/docs/en/managed-agents/quickstart) has code examples in every language
+
+## Community
+
+- [Event page (Luma)](https://luma.com/claude-e5yf) — upcoming event information is posted here too
+- Cherish the connections you made at the venue. See you at the next event!

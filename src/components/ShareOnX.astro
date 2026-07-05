@@ -3,12 +3,17 @@ import { LinkButton } from '@astrojs/starlight/components';
 
 const text = '#ClaudeCommunityOsaka #ClaudeCommunity';
 const href = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
+const isEnglish = Astro.currentLocale === 'en';
 ---
 
 <hr />
 
-<p>おつかれさまでした！ここまでの感想を、ぜひXにポストしてください。</p>
+<p>
+	{isEnglish
+		? 'Great work! Please share your thoughts so far in a post on X.'
+		: 'おつかれさまでした！ここまでの感想を、ぜひXにポストしてください。'}
+</p>
 
 <LinkButton href={href} target="_blank" rel="noopener noreferrer" icon="external">
-	感想をXにポストする
+	{isEnglish ? 'Share your thoughts on X' : '感想をXにポストする'}
 </LinkButton>

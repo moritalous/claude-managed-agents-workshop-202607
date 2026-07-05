@@ -1,0 +1,364 @@
+---
+title: 5. Agents That Work as a Team
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+With **multi-agent** setups, you can have multiple agents collaborate within a single session. On this page, you will build a **coordinator** that leads a **researcher** (web research via the Jina MCP) and a **reporter** (draft creation via the Gmail MCP), and have the team handle the job of "researching the news and summarizing it into an email draft."
+
+This page introduces the following Managed Agents features:
+
+| Feature | Role |
+|------|------|
+| Multi-agent (`multiagent`) | Configuration that gives an agent a list (roster) of agents it can delegate to |
+| Session threads | An independent execution context for each subagent. They run in parallel |
+
+<Aside>
+This page assumes that your Jina AI credentials ([1. Create an Agent in the Console](/en/intermediate/01_console/)) and your Gmail credentials ([3. An Agent That Works with Gmail](/en/advanced/03_gmail/)) are already stored in vaults.
+</Aside>
+
+## Why Build a Team?
+
+Purely in terms of functionality, you could achieve the same thing by giving a single agent both the Jina and Gmail MCP servers. Still, splitting the work across a team pays off in the three patterns the official documentation calls out:
+
+- **Parallelization** — fan out independent subtasks at the same time and have the coordinator integrate the results
+- **Specialization** — route work to agents with dedicated prompts and tools. By **not giving one agent every capability**, you can scope tools and credentials to individual agents
+- **Escalation** — hand only the hard subtasks to a more capable model
+
+The setup on this page includes all three. The coordinator (claude-sonnet-5) **can neither search the web nor touch email**; the researcher (claude-haiku-4-5) can only use Jina, and the reporter (claude-haiku-4-5) can only use Gmail. Each agent runs in an independent context called a **session thread**, so the researcher's long logs never pollute the coordinator's conversation.
+
+## 1. Create a Project
+
+Create a project, move into its folder, and install the Claude SDK.
+
+```shell
+uv init team-agent
+cd team-agent
+uv add anthropic
+```
+
+## 2. Create the Team
+
+<Steps>
+
+1. Create `setup_team.py` in the project folder and save the following content.
+
+    ```python title="setup_team.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. Find the vaults that hold the Jina and Gmail credentials
+    ###############################
+    vault_ids = []
+    for vault in client.beta.vaults.list():
+        for cred in client.beta.vaults.credentials.list(vault_id=vault.id):
+            url = getattr(cred.auth, "mcp_server_url", "") or ""
+            if ("mcp.jina.ai" in url or "gmailmcp.googleapis.com" in url) and vault.id not in vault_ids:
+                vault_ids.append(vault.id)
+                print(f"Found credential: vault={vault.id} ({vault.display_name}) / {url}")
+
+    if not vault_ids:
+        raise SystemExit("No Jina or Gmail credentials found.")
+
+    ###############################
+    # 2. Create an environment (allow network access to MCP servers)
+    ###############################
+    environment = client.beta.environments.create(
+        name="Team-environment",
+        config={
+            "type": "cloud",
+            "networking": {"type": "limited", "allow_mcp_servers": True},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 3. Create the researcher (has only the Jina MCP)
+    ###############################
+    researcher = client.beta.agents.create(
+        name="Team Researcher",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="A researcher that investigates topics via web search and article reading.",
+        system=(
+            "You are a researcher. Search for the requested topic with search_web, "
+            "and read the full text of promising articles with read_url. "
+            "Return your findings as a concise English summary with source URLs."
+        ),
+        mcp_servers=[{"name": "jina", "type": "url", "url": "https://mcp.jina.ai/v1"}],
+        tools=[
+            {
+                "type": "mcp_toolset",
+                "mcp_server_name": "jina",
+                "default_config": {"enabled": True, "permission_policy": {"type": "always_allow"}},
+            }
+        ],
+    )
+    print(f"researcher:  {researcher.id}")
+
+    ###############################
+    # 4. Create the reporter (has only the Gmail MCP, with pre-execution approval)
+    ###############################
+    reporter = client.beta.agents.create(
+        name="Team Reporter",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="A reporter that creates Gmail drafts.",
+        system=(
+            "You are a reporter. Turn the content you are given into a readable English email "
+            "and create it as a Gmail draft. Do not send any email."
+        ),
+        mcp_servers=[{"name": "gmail", "type": "url", "url": "https://gmailmcp.googleapis.com/mcp/v1"}],
+        tools=[
+            {
+                "type": "mcp_toolset",
+                "mcp_server_name": "gmail",
+                "default_config": {"enabled": True, "permission_policy": {"type": "always_ask"}},
+            }
+        ],
+    )
+    print(f"reporter:    {reporter.id}")
+
+    ###############################
+    # 5. Create the coordinator (no external permissions; delegates to the researcher and reporter)
+    ###############################
+    coordinator = client.beta.agents.create(
+        name="Research Team Coordinator",
+        model={"id": "claude-sonnet-5", "speed": "standard"},
+        description="A coordinator that leads the researcher and the reporter.",
+        system=(
+            "You are the coordinator of a research team. "
+            "Delegate research to Team Researcher and email draft creation to Team Reporter. "
+            "You yourself can neither search the web nor operate email. "
+            "When researching multiple topics, run the researcher in parallel. "
+            "Finally, integrate the results and report back to the user in English."
+        ),
+        tools=[
+            {
+                "type": "agent_toolset_20260401",
+                "default_config": {"enabled": True},
+                "configs": [
+                    {"name": "web_search", "enabled": False},
+                    {"name": "web_fetch", "enabled": False},
+                ],
+            }
+        ],
+        multiagent={
+            "type": "coordinator",
+            "agents": [
+                {"type": "agent", "id": researcher.id},
+                {"type": "agent", "id": reporter.id},
+            ],
+        },
+    )
+    print(f"coordinator: {coordinator.id}")
+
+    with open("ids_team.json", "w") as f:
+        json.dump(
+            {
+                "vault_ids": vault_ids,
+                "environment_id": environment.id,
+                "coordinator_id": coordinator.id,
+            },
+            f,
+            indent=2,
+        )
+    print("Saved the IDs to ids_team.json")
+    ```
+
+    There are three key points.
+
+    - **`multiagent.agents` is the list of delegation targets (the roster)**. Simply registering existing agents by ID turns them into a team (delegation is limited to one level deep, and you can register up to 20 agents)
+    - **Tools and credentials are scoped per agent**. Only the researcher can touch Jina, and only the reporter can touch Gmail. The coordinator also has the built-in `web_search`/`web_fetch` tools individually disabled, so it cannot reach the outside world on its own
+    - **Different models for different roles** — only the coordinator, which handles integration and judgment, uses `claude-sonnet-5`; the workers use `claude-haiku-4-5`
+
+1. Run the script.
+
+    ```shell
+    uv run setup_team.py
+    ```
+
+</Steps>
+
+## 3. Run the Team
+
+<Steps>
+
+1. Create `run_team.py` in the project folder and save the following content. Replace `TO_ADDRESS` at the top with your own email address.
+
+    ```python title="run_team.py"
+    import json
+
+    from anthropic import Anthropic
+
+    # Recipient of the email draft (replace with your own email address)
+    TO_ADDRESS = "your email address here"
+
+    client = Anthropic()
+
+    with open("ids_team.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # 1. Create a session (combining the coordinator, environment, and vaults)
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["coordinator_id"],
+        environment_id=ids["environment_id"],
+        vault_ids=ids["vault_ids"],
+    )
+    print(f"session: {session.id}")
+    print(f"Console: https://platform.claude.com/workspaces/default/sessions/{session.id}")
+    print("Chat with the agent team. Type exit to quit.\n")
+
+
+    def text_of(content) -> str:
+        return "".join(block.text for block in content if block.type == "text")
+
+
+    ###############################
+    # 2. Send and receive one turn (show the team's activity; confirm approvals with y/N)
+    ###############################
+    def run_turn(text: str) -> None:
+        pending_tools = {}  # event_id -> (tool name, input, thread ID)
+
+        stream = client.beta.sessions.events.stream(session_id=session.id)
+        client.beta.sessions.events.send(
+            session.id,
+            events=[{"type": "user.message", "content": [{"type": "text", "text": text}]}],
+        )
+
+        for event in stream:
+            if event.type == "session.thread_created":
+                print(f"[Thread created: {event.agent_name}]")
+            elif event.type == "agent.thread_message_sent":
+                summary = text_of(event.content).replace("\n", " ")[:80]
+                print(f"[→ request to {event.to_agent_name}] {summary}...")
+            elif event.type == "agent.thread_message_received":
+                summary = text_of(event.content).replace("\n", " ")[:80]
+                print(f"[← result from {event.from_agent_name}] {summary}...")
+            elif event.type == "agent.mcp_tool_use":
+                if getattr(event, "evaluated_permission", None) == "ask":
+                    thread_id = getattr(event, "session_thread_id", None)
+                    pending_tools[event.id] = (event.name, event.input, thread_id)
+                else:
+                    print(f"[Tool: {event.name}]")
+            elif event.type == "agent.message":
+                for block in event.content:
+                    if block.type == "text":
+                        print(block.text)
+            elif event.type == "session.status_idle":
+                if event.stop_reason.type == "requires_action":
+                    for event_id in event.stop_reason.event_ids:
+                        if event_id not in pending_tools:
+                            continue  # skip approval requests that have already been answered
+                        name, tool_input, thread_id = pending_tools.pop(event_id)
+                        print("\n----- Approval request -----")
+                        print(f"Tool:  {name}")
+                        print(f"Input: {json.dumps(tool_input, ensure_ascii=False, indent=2)}")
+                        answer = input("Allow execution? [y/N] ").strip().lower()
+                        confirmation = {
+                            "type": "user.tool_confirmation",
+                            "tool_use_id": event_id,
+                            "result": "allow" if answer == "y" else "deny",
+                        }
+                        if thread_id:
+                            confirmation["session_thread_id"] = thread_id
+                        if answer != "y":
+                            confirmation["deny_message"] = "The user denied execution."
+                        client.beta.sessions.events.send(session.id, events=[confirmation])
+                        print("Response sent. Continuing...\n")
+                else:
+                    break
+            elif event.type == "session.status_terminated":
+                print("The session has terminated.")
+                raise SystemExit(1)
+        stream.close()
+
+
+    ###############################
+    # 3. Send the first task, then keep the conversation going
+    ###############################
+    run_turn(
+        "Research two of today's generative AI news stories and summarize each in 2-3 lines. "
+        f"Then put those summaries into an email draft addressed to {TO_ADDRESS} (do not send it)."
+    )
+
+    while True:
+        user_input = input("\nYou> ").strip()
+        if user_input == "exit":
+            break
+        if not user_input:
+            continue
+        run_turn(user_input)
+
+    print("\nDone")
+    ```
+
+    What differs from the earlier interactive scripts is that this one displays the **multi-agent-specific events**.
+
+    | Event | Meaning |
+    |------|------|
+    | `session.thread_created` | A subagent thread was created |
+    | `agent.thread_message_sent` | The coordinator sent a request to a subagent |
+    | `agent.thread_message_received` | A subagent's result arrived at the coordinator |
+
+    Also, approval requests from a subagent (the reporter) are **cross-posted to the main session stream**. When you reply with `user.tool_confirmation`, attach the `session_thread_id` of the originating request. Because the same approval request can arrive twice, the script skips IDs that have already been answered.
+
+1. Run the script. You can watch the delegation flow as events, and when the draft is being created you will see the same approval request as in [3. An Agent That Works with Gmail](/en/advanced/03_gmail/).
+
+    ```shell
+    uv run run_team.py
+    ```
+
+    ```text
+    session: sesn_012EBVy3rLmecShnTGTU1PxZ
+    Chat with the agent team. Type exit to quit.
+
+    [Thread created: Team Researcher]
+    [→ request to Team Researcher] Research two of today's (as of the current date) generative AI news stories...
+    I have asked the researcher to investigate. Once the results arrive, I will review them and ask the Reporter to create the email draft.
+    [← result from Team Researcher] I have completed the research on generative AI news as of July 5, 2026. Here are the two stories...
+    [Thread created: Team Reporter]
+    [→ request to Team Reporter] Create a Gmail draft (do not send it) addressed to (your email address)...
+
+    ----- Approval request -----
+    Tool:  create_draft
+    Input: {
+      "body": "Hello,\n\nHere is today's roundup of important generative AI news....",
+      "subject": "Today's Generative AI News Roundup (July 5, 2026)",
+      "to": [
+        "(your email address)"
+      ]
+    }
+    Allow execution? [y/N] y
+    Response sent. Continuing...
+
+    [← result from Team Reporter] The Gmail draft has been created. [Details] - To: (your email address) - Subject: Today's Generative AI News Roundup...
+    Team Researcher's research and Team Reporter's email draft are both complete. Here is a summary of the results.
+    ...
+
+    You> exit
+
+    Done
+    ```
+
+1. In Gmail's "Drafts" folder, you will find the news roundup draft the team created. If you open the session page in the console, you can also follow the exchanges between the coordinator and each thread on screen.
+
+</Steps>
+
+## Summary
+
+- **Just register existing agents by ID in `multiagent.agents` (the roster)** and you have a team the coordinator can delegate to. Agents are reusable building blocks.
+- **Tools and credentials are scoped per agent.** You can divide work with least privilege: the coordinator gets no external permissions, the researcher gets only Jina, and the reporter gets only Gmail (vaults apply to the whole session, so a single attachment is enough).
+- Subagents run in parallel as **session threads**, and you can observe them through the `session.thread_created` and `agent.thread_message_sent`/`received` events.
+- Subagents' **approval requests are also cross-posted to the main session**, so the human approval gate can be managed in one place.
+
+<Aside>
+As for constraints: delegation goes **only one level deep** (subagents cannot re-delegate), there can be at most 25 concurrent threads, and you can register up to 20 agents. Also, registered subagents are pinned to the version that existed when the coordinator was created, so if you update a subagent you must update the coordinator as well.
+</Aside>
+
+<ShareOnX />

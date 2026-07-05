@@ -1,0 +1,110 @@
+---
+title: What Is Claude Managed Agents?
+description: An overview of Claude Managed Agents and its key concepts. This is the content of the explanation part at the beginning of the workshop.
+sidebar:
+  order: 2
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+**Claude Managed Agents** is a platform for running Claude as an autonomous agent.
+
+Until now, building an AI agent meant implementing everything yourself: the agent loop (the repeated cycle of LLM call → tool execution → returning results), a tool execution environment, sandboxing, and state management. With Managed Agents, Anthropic manages all of that for you. All the developer has to do is "configure the agent" and "send messages."
+
+## How It Differs from the Messages API
+
+The **Messages API** is the most basic API for calling Claude: you send a prompt and get a single model response back.
+
+|  | Messages API | Claude Managed Agents |
+| --- | --- | --- |
+| **Overview** | Direct prompt access to the model | A configurable agent harness running on managed infrastructure |
+| **Agent loop** | You implement it yourself | Provided by Anthropic |
+| **Tool execution** | Runs in your own code | Runs inside a cloud sandbox |
+| **State** | Stateless (send the full history every time) | Stateful (history and files are kept server-side) |
+| **Best suited for** | Fine-grained control, custom loops | Long-running tasks, asynchronous processing |
+
+Reference: [Claude Managed Agents overview](https://platform.claude.com/docs/en/managed-agents/overview)
+
+## The Four Concepts
+
+You can understand Managed Agents by grasping these four concepts. In today's hands-on, we will build things in this order as well.
+
+| Concept | Description |
+| --- | --- |
+| **Agent** | A reusable, versioned configuration that bundles the model, system prompt, tools, MCP servers, and skills |
+| **Environment** | The configuration of where sessions run: an Anthropic-managed cloud sandbox, or self-hosted on your own infrastructure |
+| **Session** | An instance of an agent running inside an environment. It executes tasks and produces artifacts |
+| **Event** | A message exchanged between your application and the agent (user messages, tool execution notifications, status updates, etc.) |
+
+Reference: [Agents](https://platform.claude.com/docs/en/managed-agents/agent-setup) / [Environments](https://platform.claude.com/docs/en/managed-agents/environments) / [Sessions](https://platform.claude.com/docs/en/managed-agents/sessions) / [Events](https://platform.claude.com/docs/en/managed-agents/events-and-streaming)
+
+## How It Works
+
+<Steps>
+
+1. **Create an agent**
+
+    Define the model, system prompt, and tools. Once created, it can be referenced any number of times by its agent ID.
+
+2. **Create an environment**
+
+    Configure where the agent runs (the sandbox configuration).
+
+3. **Start a session**
+
+    Launch a session that references the agent and environment. Each session is assigned its own isolated Linux container.
+
+4. **Send events and stream the response**
+
+    When you send a user message, Claude autonomously executes tools and streams the results back via SSE.
+
+5. **Course-correct or interrupt**
+
+    You can send additional messages to steer the agent without stopping the run. You can also interrupt and stop it.
+
+</Steps>
+
+Reference: [Quickstart](https://platform.claude.com/docs/en/managed-agents/quickstart)
+
+## Built-in Tools
+
+Specifying `agent_toolset_20260401` in the agent configuration enables the following set of tools.
+
+| Tool | Description |
+| --- | --- |
+| `bash` | Run shell commands inside the sandbox |
+| `read` / `write` / `edit` | Read, write, and edit files |
+| `glob` / `grep` | File search and text search |
+| `web_search` / `web_fetch` | Web search and fetching content from URLs |
+
+You can enable or disable tools individually, and configure permission policies that require approval before execution. In addition, you can use MCP server connections, your own custom tools, and skills.
+
+Reference: [Tools](https://platform.claude.com/docs/en/managed-agents/tools)
+
+## Watch Sessions in Real Time in the Console
+
+When you create a session, a trace view becomes available in the Claude Platform console. You can see in real time which tools the agent called and with what arguments. If you know the session ID, you can open it at the following URL, so we recommend **keeping the terminal and the console side by side**.
+
+```text
+https://platform.claude.com/workspaces/default/sessions/{session ID}
+```
+
+Reference: [Session operations](https://platform.claude.com/docs/en/managed-agents/session-operations)
+
+## Pricing
+
+1. Tokens consumed by the model within a session are billed at the standard API rates
+
+    Optimizations such as prompt caching and compaction are [built into the harness](https://platform.claude.com/docs/en/managed-agents/overview)
+
+    | Model | Input / 1M tokens | Output / 1M tokens |
+    | --- | --- | --- |
+    | Claude Opus 4.8 (`claude-opus-4-8`) | $5.00 | $25.00 |
+    | Claude Sonnet 5 (`claude-sonnet-5`) | $3.00 ($2.00 until 2026-08-31) | $15.00 ($10.00 until then) |
+    | Claude Haiku 4.5 (`claude-haiku-4-5`) | $1.00 | $5.00 |
+
+2. Session uptime ($0.08 per hour)
+
+    Uptime is metered in milliseconds only while the agent is actually working (`running`); you are not billed while it is idle waiting for input.
+
+Reference: [Pricing](https://platform.claude.com/docs/en/about-claude/pricing)

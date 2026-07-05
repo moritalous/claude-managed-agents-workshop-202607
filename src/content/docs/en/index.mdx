@@ -1,0 +1,80 @@
+---
+title: Claude Managed Agents Workshop
+description: A hands-on workshop where you build and run autonomous agents in the cloud, with your own hands.
+template: splash
+hero:
+  title: Claude Managed Agents Workshop
+  tagline: From console clicks to code — experience autonomous agents running in the cloud.<br />This content is used at the Claude Community Events workshop held in Osaka on Friday, July 31, 2026.
+  image:
+    file: ../../../assets/claude-osaka.png
+    alt: Claude Osaka
+  actions:
+    - text: Start with Preparation
+      link: guide/preparation/
+      icon: right-arrow
+    - text: Event page (Luma)
+      link: https://luma.com/claude-e5yf
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## What you will experience in this workshop
+
+Using **Claude Managed Agents**, you will create and run autonomous agents that operate in a cloud sandbox managed by Anthropic — no need to build the agent loop or the sandbox yourself. You can progress at your own pace: from the beginner track using only the console UI, to the intermediate track building with the CLI and Python SDK, and the advanced track tackling slide generation and automated news-site updates.
+
+<CardGrid>
+	<Card title="Timetable" icon="clock">
+		- 18:30 Doors open
+		- 19:00 Opening and venue guide
+		- 19:10 Introduction to Claude Managed Agents
+		- 19:30 Hands-on (at your own pace)
+		- 20:45 Networking
+		- 21:00 Closing
+	</Card>
+	<Card title="What to bring / prepare" icon="laptop">
+		- A laptop (power outlets are available but limited)
+		- A [Claude Platform](https://platform.claude.com) account (please create one in advance)
+		- API credits (to be distributed at the event)
+
+		See [Preparation](guide/preparation/) for details.
+	</Card>
+	<Card title="What you will learn" icon="star">
+		- Core concepts of Managed Agents (agents, environments, sessions)
+		- Three ways to create agents: console, CLI, and Python SDK
+		- MCP server connections and the credentials vault
+		- Slide generation with skills, scheduled runs, and retrieving artifacts
+	</Card>
+	<Card title="After the event" icon="pencil">
+		We ask participants to write a **blog post** related to this event. Anything is welcome: the agent you built in the hands-on, points you got stuck on, ideas for applications, and more.
+	</Card>
+</CardGrid>
+
+## How to proceed
+
+<LinkCard
+	title="Preparation"
+	description="Account setup, workspace creation, and more. Finishing this before the event makes things smoother."
+	href="guide/preparation/"
+/>
+<LinkCard
+	title="What are Claude Managed Agents"
+	description="The content of the opening talk. Covers how it works and the key concepts."
+	href="guide/introduction/"
+/>
+<LinkCard
+	title="Beginner: Your first agent"
+	description="Run your first agent using only the console UI — no code required."
+	href="beginner/01_quickstart/"
+/>
+<LinkCard
+	title="Intermediate: Console, CLI, and SDK"
+	description="Build a research agent connected to an MCP server, in three different ways."
+	href="intermediate/01_console/"
+/>
+<LinkCard
+	title="Advanced: Applied hands-on"
+	description="Take on a slide-generating report and an agent that automatically updates a news site."
+	href="advanced/01_report/"
+/>

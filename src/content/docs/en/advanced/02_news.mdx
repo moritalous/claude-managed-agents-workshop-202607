@@ -1,0 +1,368 @@
+---
+title: 2. An Agent That Works Every Morning
+description: Use scheduled deployments and GitHub repository integration to build an agent that researches the news every morning and automatically updates a GitHub Pages site.
+sidebar:
+  order: 2
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+We will build an agent that researches generative AI news at 8 a.m. every morning and automatically updates a GitHub Pages site. The uv and authentication setup is the same as in [3. Create an Agent with the SDK](/en/intermediate/03_sdk/); we will create a new project for this page. All GitHub operations are done with `gh` (the GitHub CLI), except for issuing the token (done in the web UI).
+
+<Aside type="caution">
+This hands-on exercise **requires a GitHub account**. You will also **create a public repository** along the way in order to publish with GitHub Pages. Be aware that whatever the agent writes will be published on the internet.
+</Aside>
+
+On this page, we will use the following Managed Agents features for the first time.
+
+| Feature | Role |
+|------|------|
+| Scheduled deployments | A mechanism that automatically creates sessions on a cron schedule |
+| GitHub repository resources | A mechanism that mounts a repository into the sandbox and pushes safely through a proxy |
+
+## 1. Create the project
+
+Create a project, move into its folder, and install the Claude SDK.
+
+```shell
+uv init ai-news-agent
+cd ai-news-agent
+uv add anthropic
+```
+
+## 2. Set up the GitHub CLI
+
+<Steps>
+
+1. Install the [GitHub CLI](https://cli.github.com/).
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    winget install --id GitHub.cli
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    brew install gh
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    After installing, reopen your terminal (or PowerShell).
+
+1. Log in to GitHub. When prompted, choose "GitHub.com", "HTTPS", and "Login with a web browser", then follow the browser instructions to authenticate.
+
+    ```shell
+    gh auth login
+    ```
+
+</Steps>
+
+## 3. Create the public repository
+
+<Steps>
+
+1. Create a public repository for the site (on the free plan, GitHub Pages only works with public repositories).
+
+    ```shell
+    gh repo create ai-news-site --public --add-readme --description "AI news auto-updated by Claude Managed Agents"
+    ```
+
+1. Enable GitHub Pages (this configuration publishes the root of the main branch).
+
+    ```shell
+    gh api "repos/$(gh api user -q .login)/ai-news-site/pages" -X POST -f "source[branch]=main" -f "source[path]=/"
+    ```
+
+1. Check the public URL and note it down.
+
+    ```shell
+    gh api "repos/$(gh api user -q .login)/ai-news-site/pages" -q .html_url
+    ```
+
+    A URL like `https://your-username.github.io/ai-news-site/` will be displayed.
+
+</Steps>
+
+## 4. Create the agent and deployment
+
+<Steps>
+
+1. Issue a token that lets the agent push to the repository. Open the [Fine-grained personal access token creation page](https://github.com/settings/personal-access-tokens/new) and click "Generate token" with the following settings.
+
+    | Field | Setting |
+    |------|------|
+    | Token name | `ai-news-site-agent` |
+    | Expiration | 7 days (a short expiration is recommended) |
+    | Repository access | "Only select repositories" → select `ai-news-site` |
+    | Permissions | From `Add permissions`, add `Contents` and set its access to `Read and write`. |
+
+    Note down the token that starts with `github_pat_`.
+
+    <Aside type="caution">
+    This token is stored on the Anthropic side as part of the deployment configuration, and the git proxy uses it to push during each morning run (it is never placed inside the sandbox). It is important to scope it down to the minimum: only the target repository, only the Contents permission, and a short expiration ([as recommended in the official documentation](https://platform.claude.com/docs/en/managed-agents/github#token-permissions)).
+    </Aside>
+
+1. Set the token you issued as an environment variable.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $env:GITHUB_TOKEN = "your github_pat_ token here"
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    export GITHUB_TOKEN="your github_pat_ token here"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. Create `setup_news.py` in the project folder and save the following content. Replace `GITHUB_REPO_URL` with your own repository URL.
+
+    ```python title="setup_news.py"
+    import json
+    import os
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    GITHUB_REPO_URL = "https://github.com/your-username/ai-news-site"
+    GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+
+    ###############################
+    # 1. Create the environment
+    ###############################
+    environment = client.beta.environments.create(
+        name="News-environment-adv",
+        config={
+            "type": "cloud",
+            "networking": {"type": "unrestricted"},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 2. Create the agent
+    ###############################
+    agent = client.beta.agents.create(
+        name="News Site Agent ADV",
+        model="claude-sonnet-5",
+        description="An agent that researches generative AI news and updates a GitHub Pages site.",
+        system=(
+            "You are the update agent for an AI news site. "
+            "Use web search to research today's generative AI news, and update index.html "
+            "in the repository mounted at /workspace/site. Write the site in English, as "
+            "simple, easy-to-read HTML (with inline CSS). If there is existing content, add "
+            "the new articles at the top under a dated heading and keep the past entries. "
+            "When you are done, use git config to set user.name to 'AI News Bot' and "
+            "user.email to 'ai-news-bot@example.com', then commit the changes and push "
+            "to main on origin."
+        ),
+        tools=[{"type": "agent_toolset_20260401", "default_config": {"enabled": True}}],
+    )
+    print(f"agent:       {agent.id}")
+
+    ###############################
+    # 3. Create the scheduled deployment (runs at 8 a.m. every morning)
+    ###############################
+    deployment = client.beta.deployments.create(
+        name="Daily AI news update",
+        agent=agent.id,
+        environment_id=environment.id,
+        initial_events=[
+            {
+                "type": "user.message",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "Research 3 major generative AI news stories from today, then update the site and push.",
+                    }
+                ],
+            }
+        ],
+        schedule={
+            "type": "cron",
+            "expression": "0 8 * * *",
+            "timezone": "Asia/Tokyo",
+        },
+        resources=[
+            {
+                "type": "github_repository",
+                "url": GITHUB_REPO_URL,
+                "mount_path": "/workspace/site",
+                "authorization_token": GITHUB_TOKEN,
+            }
+        ],
+    )
+    print(f"deployment:  {deployment.id}")
+    print(f"Upcoming runs: {deployment.schedule.upcoming_runs_at[:2]}")
+
+    with open("ids_news.json", "w") as f:
+        json.dump(
+            {
+                "environment_id": environment.id,
+                "agent_id": agent.id,
+                "deployment_id": deployment.id,
+            },
+            f,
+            indent=2,
+        )
+    print("Saved IDs to ids_news.json")
+    ```
+
+    A deployment is a "session blueprint plus a schedule". `initial_events` is the instruction sent at every launch, `schedule` is the cron expression and timezone, and `resources` is the repository (and its push token) mounted on every run.
+
+1. Run the script.
+
+    ```shell
+    uv run setup_news.py
+    ```
+
+    ```text
+    environment: env_0183BKdCPtvzBtf8SAFJG2rB
+    agent:       agent_01JLqsExMaqmJKFwVqqHAZ49
+    deployment:  depl_017BiAPxX6gBDqH9vgroemxp
+    Upcoming runs: [datetime.datetime(2026, 7, 5, 23, 0, ...), datetime.datetime(2026, 7, 6, 23, 0, ...)]
+    Saved IDs to ids_news.json
+    ```
+
+    The upcoming runs are displayed in UTC (23:00 UTC = 8 a.m. Japan time).
+
+</Steps>
+
+## 5. Test with a manual run
+
+There is no need to wait until 8 a.m. Deployments can also be run manually.
+
+<Steps>
+
+1. Create `run_news_once.py` in the project folder and save the following content.
+
+    ```python title="run_news_once.py"
+    import json
+    import time
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_news.json") as f:
+        ids = json.load(f)
+
+    # Run manually without waiting for the schedule
+    client.beta.deployments.run(ids["deployment_id"])
+    print("Triggered a manual run")
+
+    # Get the session ID from the run records
+    session_id = None
+    for _ in range(30):
+        time.sleep(2)
+        runs = client.beta.deployment_runs.list(deployment_id=ids["deployment_id"])
+        for run in runs:
+            if run.session_id:
+                session_id = run.session_id
+                break
+            if run.error:
+                print(f"Run error: {run.error.type}: {run.error.message}")
+                raise SystemExit(1)
+        if session_id:
+            break
+    print(f"session: {session_id}")
+
+    # Wait for completion while printing the session events
+    stream = client.beta.sessions.events.stream(session_id=session_id)
+    for event in stream:
+        if event.type == "agent.tool_use":
+            print(f"[tool: {event.name}]")
+        elif event.type == "agent.message":
+            for block in event.content:
+                if block.type == "text":
+                    print(block.text)
+        elif event.type == "session.status_idle":
+            if event.stop_reason.type != "requires_action":
+                break
+        elif event.type == "session.status_terminated":
+            break
+    stream.close()
+    print("\nDone")
+    ```
+
+1. Run the script. It takes a few minutes from researching the news to pushing.
+
+    ```shell
+    uv run run_news_once.py
+    ```
+
+    ```text
+    Triggered a manual run
+    session: sesn_013PNcoKdf8j9PK4PmorFb9e
+    [tool: web_search]
+    [tool: web_fetch]
+    ...
+    index.html does not exist yet, so I will create it.
+    [tool: write]
+    I verified how it renders in a browser; now configuring git, committing, and pushing.
+    [tool: bash]
+    The push is complete. I updated the site with the following content.
+    ...
+    Done
+    ```
+
+1. Open the public URL you noted in step 2 in your browser, and you will see the news page the agent created (it can take 1-2 minutes after the push for changes to appear). Take a look at the repository's commit history as well.
+
+    ```shell
+    gh repo view ai-news-site --web
+    ```
+
+</Steps>
+
+## 6. Stop the schedule
+
+<Aside type="danger">
+If you leave the deployment running, **a session will run at 8 a.m. every morning and keep consuming credits**. Be sure to pause it once you are done experimenting.
+</Aside>
+
+<Steps>
+
+1. Create `pause_news.py` in the project folder and run it.
+
+    ```python title="pause_news.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_news.json") as f:
+        ids = json.load(f)
+
+    deployment = client.beta.deployments.pause(ids["deployment_id"])
+    print(f"Paused deployment {deployment.id} (status: {deployment.status})")
+    ```
+
+    ```shell
+    uv run pause_news.py
+    ```
+
+    Manual runs (`run_news_once.py`) are still possible while paused. To resume the schedule, use `client.beta.deployments.unpause(...)`.
+
+</Steps>
+
+## Summary
+
+- A **scheduled deployment** is a "session blueprint plus a cron schedule". A new session is created automatically every time the schedule fires.
+- When you mount a repository with the `github_repository` resource, the token is injected by the git proxy, so you can push without placing any secrets inside the sandbox.
+- For the token you hand over, use a fine-grained PAT scoped down to the minimum target repository, permissions, and expiration.
+- Test with a manual run via `deployments.run()`, and stop the schedule with `pause` (or `archive`) when you are done.
+
+<ShareOnX />

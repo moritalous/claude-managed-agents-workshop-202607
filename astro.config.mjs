@@ -40,6 +40,7 @@ export default defineConfig({
 			defaultLocale: 'root',
 			locales: {
 				root: { label: '日本語', lang: 'ja' },
+				en: { label: 'English' },
 			},
 			customCss: [
 				'@fontsource/line-seed-jp/400.css',
@@ -53,29 +54,34 @@ export default defineConfig({
 			sidebar: [
 				{
 					label: 'はじめに',
+					translations: { en: 'Getting Started' },
 					items: [
-						{ label: '事前準備', slug: 'guide/preparation' },
-						{ label: 'Claude Managed Agents とは', slug: 'guide/introduction' },
+						{ label: '事前準備', translations: { en: 'Preparation' }, slug: 'guide/preparation' },
+						{ label: 'Claude Managed Agents とは', translations: { en: 'What are Claude Managed Agents' }, slug: 'guide/introduction' },
 					],
 				},
 				{
 					label: '初級',
+					translations: { en: 'Beginner' },
 					items: [{ autogenerate: { directory: 'beginner/' } }]
 				},
 				{
 					label: '中級',
+					translations: { en: 'Intermediate' },
 					items: [{ autogenerate: { directory: 'intermediate/'}}]
 				},
 				{
 					label: '上級',
+					translations: { en: 'Advanced' },
 					items: [{ autogenerate: { directory: 'advanced/'}}]
 				},
 				{
 					label: '参考資料',
+					translations: { en: 'Reference' },
 					items: [
-						{ label: 'トラブルシューティング', slug: 'reference/troubleshooting' },
-						{ label: 'リンク集・次のステップ', slug: 'reference/links' },
-						{ label: '参加者のブログ', slug: 'reference/blogs' },
+						{ label: 'トラブルシューティング', translations: { en: 'Troubleshooting' }, slug: 'reference/troubleshooting' },
+						{ label: 'リンク集・次のステップ', translations: { en: 'Links & Next Steps' }, slug: 'reference/links' },
+						{ label: '参加者のブログ', translations: { en: 'Participant Blogs' }, slug: 'reference/blogs' },
 					],
 				},
 			],
