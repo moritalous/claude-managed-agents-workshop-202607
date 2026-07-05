@@ -1,0 +1,402 @@
+---
+title: 2. Create an Agent with the CLI
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+In this section, we will create an agent using `ant`, the Claude Platform CLI.
+
+<Aside>
+Every command on this page starts with `beta:`, as in `ant beta:agents create`. The Managed Agents API is currently offered as a **beta**, and `ant` distinguishes beta APIs as commands with a `beta:` prefix. Calling a beta API normally requires the HTTP header `anthropic-beta: managed-agents-2026-04-01`, but using a `beta:`-prefixed command takes care of that—the CLI sends the corresponding header for you.
+</Aside>
+
+## 1. Set up the ant environment
+
+<Steps>
+
+1. Install ant.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    1. From the `ant` [releases page](https://github.com/anthropics/anthropic-cli/releases/latest), download `ant_{version}_windows_amd64.zip`.
+        
+    1. Extract it to any location.
+    1. Launch `powershell.exe` in the extracted folder.
+
+        :::note
+        The quickest way is to type it into the address bar where the file path is shown.
+
+        ![](../../intermediate/images/2026-07-04-23-51-59.png)
+        :::
+    1. Set the character encoding to UTF-8 so that non-ASCII text in command output does not get garbled.
+
+        ```shell
+        $OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+        ```
+
+        :::note
+        This setting is required per window. If you reopen PowerShell, run it again.
+        :::
+    </TabItem>
+
+    <TabItem label="macOS">
+
+    1. Open a terminal and run the following command.
+        ```shell
+        brew install anthropics/tap/ant
+        ```
+    </TabItem>
+
+    </Tabs>
+
+1. Run `ant auth login`.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    1. Run the following command.
+        ```shell
+        ./ant auth login
+        ```
+    </TabItem>
+
+    <TabItem label="macOS">
+
+    1. Run the following command.
+        ```shell
+        ant auth login
+        ```
+    </TabItem>
+
+    </Tabs>
+
+1. Log in via your browser.
+
+    ![](../../intermediate/images/2026-07-04-23-56-37.png)
+
+    :::note
+    If the login process does not start automatically in your browser, open the URL printed in the terminal and follow the steps to log in.
+    :::
+
+</Steps>
+
+
+## 2. Create a credential vault
+
+From here on, we will recreate the same setup you built through the UI in [1. Create an Agent in the Console](/en/intermediate/01_console/) (credential vault → environment → agent → session), this time entirely with `ant` commands. To avoid name collisions with the console version, the CLI versions have "-cli" appended to their names.
+
+<Aside>
+Run the commands in PowerShell in the folder where you extracted `ant` on Windows, or in a terminal on macOS. Variables like `$VAULT_ID` disappear when you close the window, so run the remaining steps in the same window.
+</Aside>
+
+<Steps>
+
+1. Create a vault and save its ID in a variable.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $VAULT_ID = ./ant beta:vaults create --display-name "Vault-cli" --transform id --raw-output
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    VAULT_ID=$(ant beta:vaults create --display-name "Vault-cli" --transform id --raw-output)
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    Display the contents of the variable and confirm that an ID starting with `vlt_` has been saved.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $VAULT_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    echo "$VAULT_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. Add your Jina AI API key to the vault as a credential. Replace `YOUR_API_KEY_HERE` with your actual API key before running (the command is a single line).
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant beta:vaults:credentials create --vault-id $VAULT_ID --display-name "Jina-ai-cli" --auth '{type: static_bearer, mcp_server_url: https://mcp.jina.ai/v1, token: YOUR_API_KEY_HERE}'
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ant beta:vaults:credentials create --vault-id "$VAULT_ID" --display-name "Jina-ai-cli" --auth '{type: static_bearer, mcp_server_url: https://mcp.jina.ai/v1, token: YOUR_API_KEY_HERE}'
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside>
+    You can use the same API key you obtained in [1. Create an Agent in the Console](/en/intermediate/01_console/) (`static_bearer` corresponds to "Bearer token" in the console).
+    </Aside>
+
+</Steps>
+
+## 3. Create an environment
+
+<Steps>
+
+1. Create an environment that allows network access to MCP servers, and save its ID in a variable (the command is a single line).
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $ENVIRONMENT_ID = ./ant beta:environments create --name "Jina-environment-cli" --config '{type: cloud, networking: {type: limited, allow_mcp_servers: true}}' --transform id --raw-output
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ENVIRONMENT_ID=$(ant beta:environments create --name "Jina-environment-cli" --config '{type: cloud, networking: {type: limited, allow_mcp_servers: true}}' --transform id --raw-output)
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside>
+    `allow_mcp_servers: true` corresponds to the "Allow network access for MCP servers" checkbox in the console.
+    </Aside>
+
+    Display the contents of the variable and confirm that an ID starting with `env_` has been saved.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $ENVIRONMENT_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    echo "$ENVIRONMENT_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+</Steps>
+
+## 4. Create an agent
+
+<Steps>
+
+1. In the folder where you are running the commands, create a file named `agent.yaml` with the following content.
+
+    <Aside type="caution">
+    Save it as "UTF-8" (the Notepad default is fine, but do not choose "UTF-8 with BOM"). Apart from the agent name, the settings are the same as the agent you created in the console.
+    </Aside>
+
+    ```yaml title="agent.yaml"
+    name: Jina Web Research Agent CLI
+    model:
+      id: claude-haiku-4-5
+      speed: standard
+    description: A demo agent for web search, page reading, and academic research using the Jina AI MCP server.
+    system: You are a research assistant that leverages Jina AI's search and reading tools. When you receive a question, use search_web (or search_arxiv / search_ssrn for academic topics) to find relevant sources, then use read_url or parallel_read_url to fetch the full text of promising results. Do not rely on search result snippets alone. Combine information from multiple sources, cite the URLs you used, and clearly indicate any uncertainty or conflicting information. For efficiency, prefer the parallel_* tools when searching or reading multiple sources at once. If asked to summarize or extract facts from a specific page, read that page directly with read_url. Keep your answers concise and well organized, and base them on the retrieved content rather than prior knowledge.
+    mcp_servers:
+      - name: jina
+        type: url
+        url: https://mcp.jina.ai/v1
+    tools:
+      - type: mcp_toolset
+        mcp_server_name: jina
+        default_config:
+          enabled: true
+          permission_policy:
+            type: always_allow
+    skills: []
+    metadata: {}
+    ```
+
+1. Create the agent by feeding it `agent.yaml`, and save its ID in a variable.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $AGENT_ID = Get-Content agent.yaml -Raw -Encoding UTF8 | ./ant beta:agents create --transform id --raw-output
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    AGENT_ID=$(ant beta:agents create --transform id --raw-output < agent.yaml)
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside type="caution">
+    If non-ASCII characters get registered as "?" on Windows, you forgot to run the character encoding setup from [1. Set up the ant environment](#1-set-up-the-ant-environment). After running that setup, you can overwrite the agent with `Get-Content agent.yaml -Raw -Encoding UTF8 | ./ant beta:agents update --agent-id $AGENT_ID --version 1`.
+    </Aside>
+
+    Display the contents of the variable and confirm that an ID starting with `agent_` has been saved.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $AGENT_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    echo "$AGENT_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+</Steps>
+
+## 5. Create a session
+
+<Steps>
+
+1. Confirm that all three IDs saved so far are in place.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $AGENT_ID; $ENVIRONMENT_ID; $VAULT_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    echo "$AGENT_ID"; echo "$ENVIRONMENT_ID"; echo "$VAULT_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside type="caution">
+    If you do not see three lines—`agent_...`, `env_...`, and `vlt_...`—go back to the step that created the empty variable and redo it. Running the next command with an empty variable shifts the arguments and produces errors like "Unexpected extra arguments".
+    </Aside>
+
+1. Create a session by specifying the agent, environment, and vault IDs, and save its ID in a variable (the command is a single line).
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $SESSION_ID = ./ant beta:sessions create --agent $AGENT_ID --environment-id $ENVIRONMENT_ID --vault-id $VAULT_ID --transform id --raw-output
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    SESSION_ID=$(ant beta:sessions create --agent "$AGENT_ID" --environment-id "$ENVIRONMENT_ID" --vault-id "$VAULT_ID" --transform id --raw-output)
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    Display the contents of the variable and confirm that an ID starting with `sesn_` has been saved.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $SESSION_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    echo "$SESSION_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside>
+    The vault, environment, agent, and session you have created so far also appear in the corresponding menus in the console.
+    </Aside>
+
+</Steps>
+
+## 6. Invoke the agent
+
+<Steps>
+
+1. Send a message to the session and check the agent's response.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    Send a message (the command is a single line).
+
+    ```shell
+    ./ant beta:sessions:events send --session-id $SESSION_ID --event '{type: user.message, content: [{type: text, text: "Search for the latest papers on RAG"}]}'
+    ```
+
+    The agent takes around a minute to process. You can watch its progress in real time by opening this session from the "Sessions" menu in the console.
+
+    After waiting a while, check the answer in the event history. Events are printed one per line, and the `text` on the `agent.message` line is the answer. If the agent is still processing, wait and run the command again.
+
+    ```shell
+    ./ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id $SESSION_ID
+    ```
+
+    :::note
+    Normally you can receive events in real time with `./ant beta:sessions:events stream --session-id $SESSION_ID`, but the Windows build of ant version 1.16.0 has an issue where the stream cannot be received, so this walkthrough checks the event history instead.
+    :::
+    </TabItem>
+
+    <TabItem label="macOS">
+    Send a message, then stream the events. Since the stream only carries events that occur after you connect, **copy both lines together**—line 1 (send) and line 2 (stream)—and run them.
+
+    ```shell
+    ant beta:sessions:events send --session-id "$SESSION_ID" --event '{type: user.message, content: [{type: text, text: "Search for the latest papers on RAG"}]}'
+    ant beta:sessions:events stream --session-id "$SESSION_ID"
+    ```
+
+    Following the MCP tool calls (`agent.mcp_tool_use`), the answer arrives in an `agent.message` event. When `session.status_idle` appears, the run is complete. You can stop the stream with `Ctrl+C`.
+
+    If you missed the output, you can check it in the event history. Events are printed one per line, and the `text` on the `agent.message` line is the answer.
+
+    ```shell
+    ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id "$SESSION_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. If you open the same session from the "Sessions" menu in the console, you can also review the conversation on screen.
+
+</Steps>
+
+## Summary
+
+- We reproduced the same setup we built in the console (vault → environment → agent → session) using nothing but `ant` commands.
+- Beta APIs are called with `beta:`-prefixed commands. We used `--transform id --raw-output` to extract just the ID from each response and passed it to the next command via variables.
+- Configuration can be passed either as one-line flags (`--auth`, `--event`) or as a YAML file (`agent.yaml`).
+- To interact with a session, send messages with `events send` and check results with `events stream` (or by listing the event history).
+
+<ShareOnX />

@@ -1,0 +1,178 @@
+---
+title: 1. Create an Agent in the Console
+description: A tutorial for building a web research agent that uses the Jina AI MCP server, entirely through the Console UI without writing any code.
+sidebar:
+  order: 1
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+On this page, you will build a **web research agent** entirely through the Console UI, without writing a single line of code. We will use the Jina AI MCP server to connect to external tools.
+
+Once finished, you can simply ask in chat, "Search for the latest papers on RAG," and the agent will perform web searches, read the papers, and answer with citations.
+
+![](../../intermediate/images/2026-07-04-15-05-21.png)
+
+You will create the following four components.
+
+| Component | Role |
+|------|------|
+| Credential vault | A mechanism for securely storing the Jina AI API key |
+| Environment | An execution environment that allows network access to the MCP server |
+| Agent | The research agent itself, which uses Jina AI's tools |
+| Session | An execution unit that combines the vault, environment, and agent |
+
+## What is Jina AI?
+
+[Jina AI](https://jina.ai/) is a service that provides search infrastructure APIs for LLMs, such as web search and page reading. It offers an official remote MCP server (`https://mcp.jina.ai/v1`, repository: [jina-ai/MCP](https://github.com/jina-ai/MCP)), which lets agents call tools such as:
+
+- `search_web` - Search the entire web
+- `search_arxiv` / `search_ssrn` - Search academic papers
+- `read_url` - Read a web page as Markdown
+- `parallel_read_url` - Read multiple URLs in parallel
+
+In total, about 20 tools are available, including image search and PDF extraction. You can get an API key for free without registering a credit card, and the free token allowance is enough to complete this hands-on exercise.
+
+## 1. Get a Jina AI API Key
+
+<Steps>
+1. Go to https://jina.ai/.
+
+1. Scroll down to the middle of the page and click the "API KEY & BILLING" tab. Click the copy icon to copy your API key.
+
+    ![](../../intermediate/images/2026-07-04-13-43-27.png)
+
+</Steps>
+
+## 2. Create a Credential Vault
+
+First, create a credential vault. A credential vault is a mechanism for securely storing credentials such as API keys and tokens for external services. When you specify a vault at session creation time, those credentials are used when the agent connects to the MCP server. The key benefit is that you never have to put the API key directly in the system prompt or the conversation.
+
+<Steps>
+
+1. Select the "Credential vaults" menu, then click "Create vault".
+
+    ![](../../intermediate/images/2026-07-04-13-31-40.png)
+
+1. Enter "Vault" as the vault name and click "Continue".
+
+    ![](../../intermediate/images/2026-07-04-13-33-00.png)
+
+    <Aside type="caution">
+    Credential vaults are shared within the workspace.
+    </Aside>
+
+1. Next, add a credential.
+    Enter "Jina-ai" as the name and select "Bearer token" as the type.
+
+    ![](../../intermediate/images/2026-07-04-13-36-41.png)
+
+1. Click MCP server and enter "`https://mcp.jina.ai/v1`" in the custom URL field.
+
+    ![](../../intermediate/images/2026-07-04-13-39-00.png)
+
+1. Click "Custom server".
+
+    ![](../../intermediate/images/2026-07-04-13-40-15.png)
+
+1. Enter your Jina AI API key as the token. Agree to (check) the notice about credentials, then click "Add credential".
+
+    ![](../../intermediate/images/2026-07-04-13-46-12.png)
+
+</Steps>
+
+## 3. Create an Environment
+
+<Steps>
+
+1. Select the "Environments" menu, then click "Create environment".
+
+    ![](../../intermediate/images/2026-07-04-14-12-04.png)
+
+1. Enter "Jina-environment" as the name and click "Create".
+
+    ![](../../intermediate/images/2026-07-04-14-13-44.png)
+
+1. Click "Edit".
+
+    ![](../../intermediate/images/2026-07-04-14-14-36.png)
+
+1. Check "Allow network access for MCP servers" and click "Save changes".
+
+    ![](../../intermediate/images/2026-07-04-14-15-36.png)
+
+</Steps>
+
+## 4. Create an Agent
+
+<Steps>
+
+1. Select the "Agents" menu, then click "Create agent".
+
+    ![](../../intermediate/images/2026-07-04-14-04-21.png)
+
+1. Enter the following YAML in the agent configuration field and click "Create agent".
+
+    ```yaml
+    name: Jina Web Research Agent
+    model:
+      id: claude-haiku-4-5
+      speed: standard
+    description: A demo agent for web search, page reading, and academic research using the Jina AI MCP server.
+    system: You are a research assistant that leverages Jina AI's search and reading tools. When you receive a question, use search_web (or search_arxiv / search_ssrn for academic topics) to find relevant sources, then use read_url or parallel_read_url to fetch the full text of the most promising results. Do not rely solely on search result snippets. Combine information from multiple sources, cite the URLs you used, and clearly indicate any uncertainty or conflicting information. For efficiency, prefer the parallel_* tools when searching or reading multiple sources at once. When asked to summarize or extract facts from a specific page, read that page directly with read_url. Keep your answers concise and well organized, and base them on the retrieved content rather than prior knowledge.
+    mcp_servers:
+      - name: jina
+        type: url
+        url: https://mcp.jina.ai/v1
+    tools:
+      - configs: []
+        default_config:
+          enabled: true
+          permission_policy:
+            type: always_allow
+        mcp_server_name: jina
+        type: mcp_toolset
+    skills: []
+    metadata: {}
+    ```
+
+</Steps>
+
+## 5. Create a Session
+
+<Steps>
+
+1. Select the "Sessions" menu, then click "Create session".
+
+    ![](../../intermediate/images/2026-07-04-14-54-48.png)
+
+
+1. Set the agent to "Jina Web Research Agent", the environment to "Jina-environment", and the credential vault to "Vault", then check the notice checkbox. Click "Create session".
+
+    ![](../../intermediate/images/2026-07-04-14-57-29.png)
+
+</Steps>
+
+
+## 6. Invoke the Agent
+
+<Steps>
+
+1. Type something like "Search for the latest papers on RAG" in the chat box and send it.
+
+    ![](../../intermediate/images/2026-07-04-15-01-28.png)
+
+1. The agent retrieves information via the MCP server and returns an answer.
+
+    ![](../../intermediate/images/2026-07-04-15-05-21.png)
+
+</Steps>
+
+## Summary
+
+- Store secrets such as API keys in a **credential vault** and attach it when creating a session. This keeps keys out of your system prompt and conversation.
+- Using an MCP server requires three things: (1) a credential in the vault (one per endpoint URL), (2) network access to MCP servers enabled in the environment, and (3) `mcp_servers` and `mcp_toolset` definitions on the agent.
+- Assembling the building blocks of **environment, agent, and session (plus a vault when needed)** is the basic pattern of Managed Agents. On the following pages, we will build the same setup with the CLI and the SDK.
+
+<ShareOnX />

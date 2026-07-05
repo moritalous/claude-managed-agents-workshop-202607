@@ -1,0 +1,206 @@
+---
+title: 1. Create an Agent from a Template
+description: A tutorial that creates and runs a web research agent from the "Deep researcher" quickstart template.
+sidebar:
+  order: 1
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+On this page, you will use the "Deep researcher" quickstart template to create a **web research agent**. Just by picking a template, you can experience the full flow from creating an agent to running it in a session.
+
+Once complete, you can simply send a question in the chat, and the agent will break it down into sub-questions, search the web, and respond with a report that includes citations.
+
+![](../../beginner/images/2026-07-04-07-59-08.png)
+
+You will create the following three components.
+
+| Component | Role |
+|------|------|
+| Agent | The research agent itself, which performs multi-step web research and cites its sources |
+| Environment | The execution environment, with network access allowed for web search |
+| Session | The execution unit that combines the agent and environment and runs them |
+
+## 1. Create an Agent from a Template
+
+<Steps>
+
+1. Select "Quickstart" from the "Managed Agents" menu.
+
+    ![](../../beginner/images/2026-07-04-07-22-38.png)
+
+    Make sure the workspace is set to "workshop".
+
+1. Select "Deep researcher" from the templates.
+
+    ![](../../beginner/images/2026-07-04-07-24-09.png)
+
+
+1. Click "Use template".
+
+    ![](../../beginner/images/2026-07-04-07-25-04.png)
+
+    **Template contents**
+
+    <Tabs>
+    <TabItem label="English (original)">
+    ```yaml
+    name: Deep researcher
+    description: Conducts multi-step web research with source synthesis and citations.
+    model: claude-sonnet-5
+    system: |-
+      You are a research agent. Given a question or topic:
+
+      1. Decompose it into 3-5 concrete sub-questions that, answered together, cover the topic.
+      2. For each sub-question, run targeted web searches and fetch the most authoritative sources (prefer primary sources, official docs, peer-reviewed work over blog posts and aggregators).
+      3. Read the sources in full — don't skim. Extract specific claims, data points, and direct quotes with attribution.
+      4. Synthesize a report that answers the original question. Structure it by sub-question, cite every non-obvious claim inline, and close with a "confidence & gaps" section noting where sources disagreed or where you couldn't find good coverage.
+
+      Be skeptical. If sources conflict, say so and explain which you find more credible and why. Don't paper over uncertainty with confident-sounding prose.
+    tools:
+      - type: agent_toolset_20260401
+    metadata:
+      template: deep-research
+    ```
+
+    </TabItem>
+    <TabItem label="Japanese">
+
+    ```yaml
+    name: ディープリサーチャー
+    description: 複数ステップのウェブ調査を行い、情報源の統合と引用を行います。
+    model: claude-sonnet-5
+    system: |-
+      あなたはリサーチエージェントです。質問やトピックが与えられたら:
+
+      1. トピック全体をカバーできるような、具体的な3〜5個のサブクエスチョンに分解してください。
+      2. 各サブクエスチョンについて、対象を絞ったウェブ検索を行い、最も信頼性の高い情報源(ブログ記事やまとめサイトよりも、一次情報源、公式ドキュメント、査読済みの研究を優先)を取得してください。
+      3. 情報源は流し読みせず、しっかりと読み込んでください。具体的な主張、データ、直接引用を出典とともに抽出してください。
+      4. 元の質問に答えるレポートを統合してください。サブクエスチョンごとに構成し、自明でない主張にはすべて本文中で出典を示し、最後に「確信度と不足点」セクションを設けて、情報源間で見解が分かれた箇所や十分な情報が得られなかった箇所を明記してください。
+
+      懐疑的な姿勢を保ってください。情報源同士が矛盾する場合はその旨を明示し、どちらがより信頼できるか、その理由とともに説明してください。自信ありげな文章で不確実性を覆い隠さないでください。
+    tools:
+      - type: agent_toolset_20260401
+    metadata:
+      template: deep-research
+    ```
+    </TabItem>
+    </Tabs>
+
+
+1. The agent has been created. Next, click "Next: Configure environment".
+
+    ![](../../beginner/images/2026-07-04-07-31-59.png)
+
+</Steps>
+
+## 2. Configure the Environment
+
+<Steps>
+
+1. Configure network access. Select "Unrestricted".
+
+    ![](../../beginner/images/2026-07-04-07-32-42.png)
+
+
+    <Aside>
+
+    You can give instructions through the chat box. For example, if you want responses in Japanese, you can ask like this.
+
+    ![](../../beginner/images/2026-07-04-07-33-52.png)
+
+    From this point on, the conversation should continue in Japanese.
+
+    ![](../../beginner/images/2026-07-04-07-34-56.png)
+
+    </Aside>
+
+1. The environment has been created. Next, click "Next: Start session".
+
+    ![](../../beginner/images/2026-07-04-07-44-22.png)
+
+</Steps>
+
+## 3. Test in a Session
+
+<Steps>
+
+1. Start a session and run a test. Click "Run test".
+
+    ![](../../beginner/images/2026-07-04-07-45-44.png)
+
+1. The session starts in the preview area on the right. A test message is pre-filled in the chat box, so send it.
+
+    ![](../../beginner/images/2026-07-04-07-47-28.png)
+
+1. The agent is invoked. The chat pane on the left shows the CLI command for the API call (you can switch to Python or TypeScript). The preview area on the right shows the API response.
+
+    ![](../../beginner/images/2026-07-04-07-52-52.png)
+
+1. Switch to the Transcript tab to see the key messages in a readable format.
+
+    ![](../../beginner/images/2026-07-04-07-56-09.png)
+
+1. Click the agent's last message to see the final answer nicely formatted. Click "×" to go back to the previous view.
+
+    ![](../../beginner/images/2026-07-04-07-59-08.png)
+
+</Steps>
+
+## 4. Adjust the Agent
+
+<Steps>
+
+1. If you want to adjust the agent's behavior, give instructions in the chat pane on the left.
+
+    ![](../../beginner/images/2026-07-04-08-02-02.png)
+
+1. You may be asked to confirm how the agent should be updated.
+
+    ![](../../beginner/images/2026-07-04-08-03-23.png)
+
+1. The system prompt is updated. You can check it by switching to the "Configuration" tab.
+
+    ![](../../beginner/images/2026-07-04-08-05-55.png)
+
+    <Aside type="tip">
+    You can also edit the YAML in the Configuration tab directly.
+    </Aside>
+
+1. When you are done adjusting, click "Stop session".
+
+    ![](../../beginner/images/2026-07-04-08-02-35.png)
+
+
+</Steps>
+
+## 5. Review the Resources You Created
+
+<Steps>
+
+1. You can review the agent, environment, and session you created from their respective menus.
+
+    * Agents
+
+    ![](../../beginner/images/2026-07-04-08-09-13.png)
+
+    * Environments
+
+    ![](../../beginner/images/2026-07-04-08-09-46.png)
+
+    * Sessions
+
+    ![](../../beginner/images/2026-07-04-08-10-31.png)
+
+
+</Steps>
+
+## Summary
+
+- Just by picking a template, you experienced the basic flow of **agent → environment → session** end to end.
+- An agent is really just a configuration (YAML) that defines its model, system prompt, and tools. You can view and edit it anytime in the "Configuration" tab.
+- In the environment, you configured the sandbox's network access.
+- When you want to change the agent's behavior, simply give instructions in the chat and the system prompt is updated for you.
+
+<ShareOnX />
