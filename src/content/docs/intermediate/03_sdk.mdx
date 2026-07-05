@@ -1,0 +1,386 @@
+---
+title: 3. SDKでエージェントを作成
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../components/ShareOnX.astro';
+
+PythonとClaude SDK(`anthropic`パッケージ)を使ってエージェントを作成します。Pythonの実行環境は`uv`で統一します。
+
+<Aside>
+認証は、[2. CLIでエージェントを作成](/intermediate/02_ant/)で`ant auth login`したログイン情報をSDKが自動で使うため、このページでの設定は不要です。APIキーで認証したい場合は[4. 補足：APIキーの発行と使い方](/intermediate/04_apikey/)を参照してください。
+</Aside>
+
+<Aside>
+このページのコードは`client.beta.vaults.create(...)`のように、すべて`beta`を挟んで呼び出します。CLIのコマンドが`beta:`から始まっていたのと同じ理由で、ベータ版として提供されているManaged AgentsのAPIは、SDKでは`client.beta`名前空間に区別されています。`beta`経由で呼ぶことがベータ版利用の指定にあたり、必要な`anthropic-beta: managed-agents-2026-04-01`ヘッダーはSDKが送信してくれます。
+</Aside>
+
+## 1. uvをインストール
+
+<Steps>
+
+1. [uv](https://docs.astral.sh/uv/)をインストールします。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    PowerShellで以下のコマンドを実行します。
+
+    ```shell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ターミナルで以下のコマンドを実行します。
+
+    ```shell
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. ターミナル(またはPowerShell)を**開き直してから**、インストールを確認します。
+
+    ```shell
+    uv --version
+    ```
+
+    `uv 0.11.6`のようにバージョンが表示されればOKです。
+
+</Steps>
+
+## 2. プロジェクトを作成
+
+<Steps>
+
+1. プロジェクトを作成し、そのフォルダーに移動します。
+
+    ```shell
+    uv init jina-research-agent
+    cd jina-research-agent
+    ```
+
+1. Claude SDKをインストールします。
+
+    ```shell
+    uv add anthropic
+    ```
+
+</Steps>
+
+## 3. リソースを作成
+
+認証情報ボールト・環境・エージェントは「一度作れば使い回す」リソースなので、作成用のスクリプトにまとめます。内容は[1. コンソールでエージェントを作成](/intermediate/01_console/)で画面から作ったものと同じで、名前には「-sdk」を付けています。
+
+<Steps>
+
+1. プロジェクトのフォルダーに`setup.py`を作成し、以下の内容を保存します。`ここにJina AIのAPIキー`の部分は実際のAPIキーに置き換えてください。
+
+    ```python title="setup.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. 認証情報ボールトを作成
+    ###############################
+    vault = client.beta.vaults.create(display_name="Vault-sdk")
+    print(f"vault:       {vault.id}")
+
+    ###############################
+    # 2. ボールトにJina AIのAPIキーを追加
+    ###############################
+    credential = client.beta.vaults.credentials.create(
+        vault_id=vault.id,
+        display_name="Jina-ai-sdk",
+        auth={
+            "type": "static_bearer",
+            "mcp_server_url": "https://mcp.jina.ai/v1",
+            "token": "ここにJina AIのAPIキー",
+        },
+    )
+    print(f"credential:  {credential.id}")
+
+    ###############################
+    # 3. 環境を作成（MCPサーバーへのネットワークアクセスを許可）
+    ###############################
+    environment = client.beta.environments.create(
+        name="Jina-environment-sdk",
+        config={
+            "type": "cloud",
+            "networking": {"type": "limited", "allow_mcp_servers": True},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 4. エージェントを作成
+    ###############################
+    agent = client.beta.agents.create(
+        name="Jina Web Research Agent SDK",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="Jina AIのMCPサーバーを使ったWeb検索、ページ読み取り、学術研究のデモエージェント。",
+        system="あなたはJina AIの検索・読み取りツールを活用するリサーチアシスタントです。質問を受けたら、search_web（学術的なトピックの場合はsearch_arxivやsearch_ssrn）を使って関連ソースを見つけ、その後read_urlまたはparallel_read_urlを使って、有望な結果の全文を取得してください。検索結果のスニペットだけに頼らないようにしてください。複数のソースから得た情報を組み合わせ、使用したURLを引用し、不確実な点や矛盾する情報がある場合は明確に示してください。効率化のため、複数のソースを同時に検索・読み取る際はparallel_*系のツールを優先して使ってください。特定のページの要約や事実抽出を求められた場合は、read_urlで直接そのページを読み取ってください。回答は簡潔かつ整理された形にし、事前知識ではなく取得したコンテンツに基づくようにしてください。",
+        mcp_servers=[{"name": "jina", "type": "url", "url": "https://mcp.jina.ai/v1"}],
+        tools=[
+            {
+                "type": "mcp_toolset",
+                "mcp_server_name": "jina",
+                "default_config": {
+                    "enabled": True,
+                    "permission_policy": {"type": "always_allow"},
+                },
+            }
+        ],
+    )
+    print(f"agent:       {agent.id}")
+
+    ###############################
+    # 作成したIDをファイルに保存（run.pyで使う）
+    ###############################
+    with open("ids.json", "w") as f:
+        json.dump(
+            {
+                "vault_id": vault.id,
+                "environment_id": environment.id,
+                "agent_id": agent.id,
+            },
+            f,
+            indent=2,
+        )
+    print("IDをids.jsonに保存しました")
+    ```
+
+1. スクリプトを実行します。
+
+    ```shell
+    uv run setup.py
+    ```
+
+    次のように、作成されたリソースのIDが表示されます。
+
+    ```text
+    vault:       vlt_011Cci1zcUettnGhV6NQabv9
+    credential:  vcrd_012oihCmwZH95gkNgf4Pix3e
+    environment: env_018fgtuvYobdrA98ty299UpD
+    agent:       agent_018ZmPdCappkAQ5g3nc444To
+    IDをids.jsonに保存しました
+    ```
+
+    <Aside type="caution">
+    エージェントは「作成は一度だけ、以降はIDで参照」が基本パターンです。このスクリプトではIDを`ids.json`に保存し、次のスクリプトで読み込んで使います。`setup.py`を実行するのは一度だけにしてください(再実行すると環境名の重複でエラーになります)。
+    </Aside>
+
+</Steps>
+
+## 4. エージェントを呼び出す
+
+セッションの作成とエージェントとの対話は、実行のたびに使うスクリプトにまとめます。
+
+<Steps>
+
+1. プロジェクトのフォルダーに`run.py`を作成し、以下の内容を保存します。
+
+    ```python title="run.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # setup.pyで保存したIDを読み込む
+    ###############################
+    with open("ids.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # 1. セッションを作成（エージェント・環境・ボールトを組み合わせる）
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+        vault_ids=[ids["vault_id"]],
+    )
+    print(f"session: {session.id}")
+
+    ###############################
+    # 2. 先にイベントのストリームを開く（イベントを取りこぼさないため）
+    ###############################
+    stream = client.beta.sessions.events.stream(session_id=session.id)
+
+    ###############################
+    # 3. メッセージを送信
+    ###############################
+    client.beta.sessions.events.send(
+        session.id,
+        events=[
+            {
+                "type": "user.message",
+                "content": [{"type": "text", "text": "最新のRAGに関する論文を検索して"}],
+            }
+        ],
+    )
+    print("メッセージを送信しました。応答を待っています...\n")
+
+    ###############################
+    # 4. イベントを受信しながら表示する
+    ###############################
+    for event in stream:
+        if event.type == "agent.mcp_tool_use":
+            print(f"[ツール呼び出し: {event.name}]")
+        elif event.type == "agent.message":
+            for block in event.content:
+                if block.type == "text":
+                    print(block.text)
+        elif event.type == "session.status_idle":
+            if event.stop_reason.type != "requires_action":
+                break
+        elif event.type == "session.status_terminated":
+            break
+
+    stream.close()
+    print("\n完了しました")
+    ```
+
+    <Aside>
+    ストリームには接続後に発生したイベントだけが流れるため、**先にストリームを開いてからメッセージを送信**するのがポイントです。受信はエージェントが入力待ち(`session.status_idle`)になったら終了します。
+    </Aside>
+
+1. スクリプトを実行します。
+
+    ```shell
+    uv run run.py
+    ```
+
+    ツールの呼び出しに続いて、回答がリアルタイムに表示されます(1分ほどかかります)。
+
+    ```text
+    session: sesn_01CCczZDALAHspEXUqx9rhFQ
+    メッセージを送信しました。応答を待っています...
+
+    [ツール呼び出し: search_arxiv]
+    最新のRAG関連論文が見つかりました。...
+
+    ## 最新のRAG関連論文（2026年6月発表）
+
+    1. **TA-RAG: Tone-Aware Retrieval-Augmented Generation for Peer** (2606.06794)
+       - トーン制御をRAGパイプラインに組み込む軽量フレームワーク
+    ...
+
+    完了しました
+    ```
+
+1. `run.py`をもう一度実行すると、同じエージェントで新しいセッションが始まります。メッセージの内容を変えて試してみてください。作成したリソースやセッションのやり取りは、コンソールの各メニューからも確認できます。
+
+</Steps>
+
+## 5. 対話を続ける
+
+`run.py`は1往復で終了しますが、セッションはステートフルなので、**同じセッションにメッセージを送り続けると会話がつながります**。対話型のバージョンを作ってみましょう。
+
+<Steps>
+
+1. プロジェクトのフォルダーに`chat.py`を作成し、以下の内容を保存します。
+
+    ```python title="chat.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # setup.pyで保存したIDを読み込む
+    ###############################
+    with open("ids.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # セッションは最初に1つだけ作る（同じセッションに送り続けると会話がつながる）
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+        vault_ids=[ids["vault_id"]],
+    )
+    print(f"session: {session.id}")
+    print("エージェントと対話します。exit と入力すると終了します。\n")
+
+    while True:
+        user_input = input("あなた> ").strip()
+        if user_input == "exit":
+            break
+        if not user_input:
+            continue
+
+        ###############################
+        # ストリームを開いてからメッセージを送信
+        ###############################
+        stream = client.beta.sessions.events.stream(session_id=session.id)
+        client.beta.sessions.events.send(
+            session.id,
+            events=[
+                {
+                    "type": "user.message",
+                    "content": [{"type": "text", "text": user_input}],
+                }
+            ],
+        )
+
+        ###############################
+        # エージェントが入力待ちになるまでイベントを表示
+        ###############################
+        for event in stream:
+            if event.type == "agent.mcp_tool_use":
+                print(f"[ツール呼び出し: {event.name}]")
+            elif event.type == "agent.message":
+                for block in event.content:
+                    if block.type == "text":
+                        print(block.text)
+            elif event.type == "session.status_idle":
+                if event.stop_reason.type != "requires_action":
+                    break
+            elif event.type == "session.status_terminated":
+                break
+        stream.close()
+        print()
+    ```
+
+    <Aside>
+    セッションの作成はループの**外**で一度だけ行い、各ターンは「ストリームを開く → 送信 → 入力待ちになるまで受信」の繰り返しです。会話の履歴はセッション側に保存されているので、クライアントで履歴を管理する必要はありません。
+    </Aside>
+
+1. スクリプトを実行し、続けて質問してみます。前のやり取りを覚えていることが確認できます。
+
+    ```shell
+    uv run chat.py
+    ```
+
+    ```text
+    session: sesn_01UDB8UgiKxoFr1myDyGfjf2
+    エージェントと対話します。exit と入力すると終了します。
+
+    あなた> こんにちは
+    こんにちは。
+
+    あなた> 私が最初に送ったメッセージを覚えていますか?
+    はい、「こんにちは」というご挨拶でした。
+
+    あなた> exit
+    ```
+
+</Steps>
+
+## まとめ
+
+- コンソール・CLIと同じ構成を、Python SDKで構築しました。
+- リソースの作成(`setup.py`)と実行(`run.py`)をスクリプトとして分け、IDを`ids.json`で受け渡すのが基本パターンです。
+- イベントは**ストリームを先に開いてから送信**し、`session.status_idle`で受信を終えます。
+- セッションはステートフルなので、同じセッションに送り続けるだけで会話がつながります(`chat.py`)。履歴の管理はクライアント側では不要です。
+
+<ShareOnX />

@@ -1,0 +1,368 @@
+---
+title: 2. 毎朝働くエージェント
+description: スケジュールデプロイメントとGitHubリポジトリ連携で、毎朝ニュースを調査してGitHub Pagesのサイトを自動更新するエージェントを作る。
+sidebar:
+  order: 2
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../components/ShareOnX.astro';
+
+毎朝8時に生成AIのニュースを調査して、GitHub Pagesのサイトを自動更新するエージェントを作ります。uvと認証のセットアップは[3. SDKでエージェントを作成](/intermediate/03_sdk/)と同じ前提で、このページ用に新しいプロジェクトを作って進めます。GitHub側の操作は、トークンの発行(Web画面)を除いて`gh`(GitHub CLI)で行います。
+
+<Aside type="caution">
+このハンズオンには**GitHubアカウントが必要**です。また、途中でGitHub Pagesで公開するための**公開(public)リポジトリを作成**します。エージェントが書き込んだ内容がインターネットに公開される点に注意してください。
+</Aside>
+
+このページでは、Managed Agentsの次の要素を新しく使います。
+
+| 要素 | 役割 |
+|------|------|
+| スケジュールデプロイメント | cronスケジュールでセッションを自動作成する仕組み |
+| GitHubリポジトリリソース | サンドボックスにリポジトリをマウントし、プロキシ経由で安全にpushする仕組み |
+
+## 1. プロジェクトを作成
+
+プロジェクトを作成し、そのフォルダーに移動して、Claude SDKをインストールします。
+
+```shell
+uv init ai-news-agent
+cd ai-news-agent
+uv add anthropic
+```
+
+## 2. GitHub CLIをセットアップ
+
+<Steps>
+
+1. [GitHub CLI](https://cli.github.com/)をインストールします。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    winget install --id GitHub.cli
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    brew install gh
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    インストール後、ターミナル（またはPowerShell）を開き直してください。
+
+1. GitHubにログインします。聞かれたら「GitHub.com」「HTTPS」「Login with a web browser」を選び、ブラウザの案内に沿って認証します。
+
+    ```shell
+    gh auth login
+    ```
+
+</Steps>
+
+## 3. 公開用リポジトリを作成
+
+<Steps>
+
+1. サイト用の公開リポジトリを作成します(GitHub Pagesは無料プランでは公開リポジトリのみ使えます)。
+
+    ```shell
+    gh repo create ai-news-site --public --add-readme --description "AI news auto-updated by Claude Managed Agents"
+    ```
+
+1. GitHub Pagesを有効化します(mainブランチ直下を公開する設定です)。
+
+    ```shell
+    gh api "repos/$(gh api user -q .login)/ai-news-site/pages" -X POST -f "source[branch]=main" -f "source[path]=/"
+    ```
+
+1. 公開URLを確認して控えておきます。
+
+    ```shell
+    gh api "repos/$(gh api user -q .login)/ai-news-site/pages" -q .html_url
+    ```
+
+    `https://ユーザー名.github.io/ai-news-site/`のようなURLが表示されます。
+
+</Steps>
+
+## 4. エージェントとデプロイメントを作成
+
+<Steps>
+
+1. エージェントがリポジトリにpushするためのトークンを発行します。[Fine-grained personal access tokenの発行画面](https://github.com/settings/personal-access-tokens/new)を開き、次の内容で「Generate token」します。
+
+    | 項目 | 設定 |
+    |------|------|
+    | Token name | `ai-news-site-agent` |
+    | Expiration | 7 days(短めを推奨) |
+    | Repository access | 「Only select repositories」→ `ai-news-site`を選択 |
+    | Permissions | `Add permissions`から`Contents`を追加。Accessを`Read and write`に。 |
+
+    表示された`github_pat_`で始まるトークンを控えます。
+
+    <Aside type="caution">
+    このトークンはデプロイメントの設定としてAnthropic側に保存され、毎朝の実行時にgitプロキシがpushに使います(サンドボックス内には置かれません)。対象リポジトリのみ・Contents権限のみ・短い有効期限、と最小に絞るのが重要です([公式ドキュメントの推奨](https://platform.claude.com/docs/en/managed-agents/github#token-permissions))。
+    </Aside>
+
+1. 発行したトークンを環境変数に設定します。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $env:GITHUB_TOKEN = "ここにgithub_pat_のトークン"
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    export GITHUB_TOKEN="ここにgithub_pat_のトークン"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. プロジェクトのフォルダーに`setup_news.py`を作成し、以下の内容を保存します。`GITHUB_REPO_URL`は自分のリポジトリのURLに置き換えてください。
+
+    ```python title="setup_news.py"
+    import json
+    import os
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    GITHUB_REPO_URL = "https://github.com/あなたのユーザー名/ai-news-site"
+    GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
+
+    ###############################
+    # 1. 環境を作成
+    ###############################
+    environment = client.beta.environments.create(
+        name="News-environment-adv",
+        config={
+            "type": "cloud",
+            "networking": {"type": "unrestricted"},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 2. エージェントを作成
+    ###############################
+    agent = client.beta.agents.create(
+        name="News Site Agent ADV",
+        model="claude-sonnet-5",
+        description="生成AIニュースを調査してGitHub Pagesのサイトを更新するエージェント。",
+        system=(
+            "あなたはAIニュースサイトの更新エージェントです。"
+            "Web検索で当日の生成AI関連ニュースを調査し、/workspace/site にマウントされた"
+            "リポジトリの index.html を更新してください。サイトは日本語で、シンプルで読みやすい"
+            "HTML（CSSはインライン）にしてください。既存の内容がある場合は、日付の見出しを付けて"
+            "新しい記事を上に追記し、過去分は残してください。"
+            "作業が終わったら、git config で user.name を 'AI News Bot'、user.email を "
+            "'ai-news-bot@example.com' に設定したうえで、変更をコミットして origin の main に"
+            "プッシュしてください。"
+        ),
+        tools=[{"type": "agent_toolset_20260401", "default_config": {"enabled": True}}],
+    )
+    print(f"agent:       {agent.id}")
+
+    ###############################
+    # 3. スケジュールデプロイメントを作成（毎朝8時に実行）
+    ###############################
+    deployment = client.beta.deployments.create(
+        name="毎朝のAIニュース更新",
+        agent=agent.id,
+        environment_id=environment.id,
+        initial_events=[
+            {
+                "type": "user.message",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": "今日の生成AI関連の主要ニュースを3件調査し、サイトを更新してプッシュしてください。",
+                    }
+                ],
+            }
+        ],
+        schedule={
+            "type": "cron",
+            "expression": "0 8 * * *",
+            "timezone": "Asia/Tokyo",
+        },
+        resources=[
+            {
+                "type": "github_repository",
+                "url": GITHUB_REPO_URL,
+                "mount_path": "/workspace/site",
+                "authorization_token": GITHUB_TOKEN,
+            }
+        ],
+    )
+    print(f"deployment:  {deployment.id}")
+    print(f"次回の実行予定: {deployment.schedule.upcoming_runs_at[:2]}")
+
+    with open("ids_news.json", "w") as f:
+        json.dump(
+            {
+                "environment_id": environment.id,
+                "agent_id": agent.id,
+                "deployment_id": deployment.id,
+            },
+            f,
+            indent=2,
+        )
+    print("IDをids_news.jsonに保存しました")
+    ```
+
+    デプロイメントは「セッションの設計図+スケジュール」です。`initial_events`が毎回の起動時に送られる指示、`schedule`がcron式とタイムゾーン、`resources`が毎回マウントされるリポジトリ(とpush用トークン)になります。
+
+1. スクリプトを実行します。
+
+    ```shell
+    uv run setup_news.py
+    ```
+
+    ```text
+    environment: env_0183BKdCPtvzBtf8SAFJG2rB
+    agent:       agent_01JLqsExMaqmJKFwVqqHAZ49
+    deployment:  depl_017BiAPxX6gBDqH9vgroemxp
+    次回の実行予定: [datetime.datetime(2026, 7, 5, 23, 0, ...), datetime.datetime(2026, 7, 6, 23, 0, ...)]
+    IDをids_news.jsonに保存しました
+    ```
+
+    実行予定はUTCで表示されます(23:00 UTC = 日本時間の朝8時)。
+
+</Steps>
+
+## 5. 手動実行でテスト
+
+朝8時を待つ必要はありません。デプロイメントは手動でも実行できます。
+
+<Steps>
+
+1. プロジェクトのフォルダーに`run_news_once.py`を作成し、以下の内容を保存します。
+
+    ```python title="run_news_once.py"
+    import json
+    import time
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_news.json") as f:
+        ids = json.load(f)
+
+    # スケジュールを待たずに手動実行
+    client.beta.deployments.run(ids["deployment_id"])
+    print("手動実行をトリガーしました")
+
+    # 実行レコードからセッションIDを取得
+    session_id = None
+    for _ in range(30):
+        time.sleep(2)
+        runs = client.beta.deployment_runs.list(deployment_id=ids["deployment_id"])
+        for run in runs:
+            if run.session_id:
+                session_id = run.session_id
+                break
+            if run.error:
+                print(f"実行エラー: {run.error.type}: {run.error.message}")
+                raise SystemExit(1)
+        if session_id:
+            break
+    print(f"session: {session_id}")
+
+    # セッションのイベントを表示しながら完了を待つ
+    stream = client.beta.sessions.events.stream(session_id=session_id)
+    for event in stream:
+        if event.type == "agent.tool_use":
+            print(f"[ツール: {event.name}]")
+        elif event.type == "agent.message":
+            for block in event.content:
+                if block.type == "text":
+                    print(block.text)
+        elif event.type == "session.status_idle":
+            if event.stop_reason.type != "requires_action":
+                break
+        elif event.type == "session.status_terminated":
+            break
+    stream.close()
+    print("\n完了しました")
+    ```
+
+1. スクリプトを実行します。ニュースの調査からpushまで数分かかります。
+
+    ```shell
+    uv run run_news_once.py
+    ```
+
+    ```text
+    手動実行をトリガーしました
+    session: sesn_013PNcoKdf8j9PK4PmorFb9e
+    [ツール: web_search]
+    [ツール: web_fetch]
+    ...
+    index.htmlがまだ存在しないので、新規作成します。
+    [ツール: write]
+    ブラウザ表示を確認し、git設定・コミット・プッシュを行います。
+    [ツール: bash]
+    プッシュが完了しました。以下の内容でサイトを更新しました。
+    ...
+    完了しました
+    ```
+
+1. 手順2で控えた公開URLをブラウザで開くと、エージェントが作ったニュースページが表示されます(pushからの反映に1〜2分かかることがあります)。リポジトリのコミット履歴も見てみましょう。
+
+    ```shell
+    gh repo view ai-news-site --web
+    ```
+
+</Steps>
+
+## 6. スケジュールを止める
+
+<Aside type="danger">
+デプロイメントを放置すると、**毎朝8時にセッションが実行されてクレジットを消費し続けます**。試し終わったら必ず一時停止してください。
+</Aside>
+
+<Steps>
+
+1. プロジェクトのフォルダーに`pause_news.py`を作成し、実行します。
+
+    ```python title="pause_news.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_news.json") as f:
+        ids = json.load(f)
+
+    deployment = client.beta.deployments.pause(ids["deployment_id"])
+    print(f"deployment {deployment.id} を一時停止しました (status: {deployment.status})")
+    ```
+
+    ```shell
+    uv run pause_news.py
+    ```
+
+    一時停止中も手動実行(`run_news_once.py`)は可能です。スケジュールを再開したいときは`client.beta.deployments.unpause(...)`を使います。
+
+</Steps>
+
+## まとめ
+
+- **スケジュールデプロイメント**は「セッションの設計図+cronスケジュール」です。スケジュールが来るたびに新しいセッションが自動作成されます。
+- `github_repository`リソースでリポジトリをマウントすると、トークンはgitプロキシが注入するため、サンドボックス内に秘密情報を置かずにpushできます。
+- 預けるトークンは、対象リポジトリ・権限・有効期限を最小に絞ったfine-grained PATを使います。
+- `deployments.run()`で手動実行してテストし、使い終わったら`pause`(または`archive`)でスケジュールを止めます。
+
+<ShareOnX />

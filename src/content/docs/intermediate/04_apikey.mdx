@@ -1,0 +1,89 @@
+---
+title: 4. 補足：APIキーの発行と使い方
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+このページ以前のCLI・SDKの手順では、`ant auth login`のログイン情報を使って認証していました。APIキーは発行していません。このページでは、認証の仕組みと、APIキーが必要になった場合の発行・設定方法を説明します。
+
+## CLIでログインしていればAPIキーは不要
+
+`ant`と`anthropic`パッケージ(SDK)は、認証情報を次の優先順位で探します。
+
+1. 環境変数`ANTHROPIC_API_KEY`
+2. 環境変数`ANTHROPIC_AUTH_TOKEN`
+3. **`ant auth login`が保存したログイン情報**(Windowsは`%APPDATA%\Anthropic`、macOSは`~/.config/anthropic/`)
+
+そのため、`ant auth login`済みのマシンでは、CLIも、引数なしの`Anthropic()`で作ったSDKクライアントも、追加の設定なしでそのまま動きます。トークンの有効期限の更新も自動で行われます。
+
+どの認証情報が使われているか分からなくなったら、次のコマンドで確認できます。
+
+<Tabs syncKey="os">
+
+<TabItem label="Windows">
+```shell
+./ant auth status
+```
+</TabItem>
+
+<TabItem label="macOS">
+```shell
+ant auth status
+```
+</TabItem>
+
+</Tabs>
+
+<Aside type="caution">
+環境変数の方がログイン情報より**優先**されます。古い`ANTHROPIC_API_KEY`が環境変数に残っていると(空文字でも)そちらが使われるので、ログイン情報で認証したい場合は環境変数を削除してください。
+</Aside>
+
+## APIキーが必要になるケース
+
+次のような場面では、ログイン情報の代わりにAPIキーを使います。
+
+- CIやサーバーなど、ブラウザでのログイン操作ができない環境で実行する
+- `ant`をインストールしていないマシンでSDKだけを使う
+- チームで共有するアプリケーションに組み込む
+
+## APIキーを発行する
+
+<Steps>
+
+1. コンソールの「APIキー」メニューを選択し、「キーを作成」をクリックします。
+
+    ![](images/2026-07-04-23-33-46.png)
+
+    <Aside>
+    ワークスペースが「workshop」になっていることを確認してください。APIキーはワークスペース単位で発行され、そのワークスペースのリソースにだけアクセスできます。
+    </Aside>
+
+1. 名前を入力し、「追加」をクリックします。表示されたAPIキー(`sk-ant-`で始まる文字列)を控えます。
+
+    ![](images/2026-07-04-23-36-09.png)
+
+</Steps>
+
+## APIキーを使う
+
+環境変数`ANTHROPIC_API_KEY`に設定すると、CLIとSDKの両方が自動で使います。
+
+<Tabs syncKey="os">
+
+<TabItem label="Windows">
+```shell
+$env:ANTHROPIC_API_KEY = "ここにAPIキー"
+```
+</TabItem>
+
+<TabItem label="macOS">
+```shell
+export ANTHROPIC_API_KEY="ここにAPIキー"
+```
+</TabItem>
+
+</Tabs>
+
+<Aside type="caution">
+この設定方法はウィンドウを閉じると消えます。永続化したい場合は、Windowsは「環境変数の編集」、macOSは`~/.zshrc`への追記で設定してください。APIキーをスクリプトのコードに直接書くのは避けましょう。
+</Aside>

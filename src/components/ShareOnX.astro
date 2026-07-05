@@ -1,0 +1,14 @@
+---
+import { LinkButton } from '@astrojs/starlight/components';
+
+const text = '#ClaudeCommunityOsaka #ClaudeCommunity';
+const href = `https://x.com/intent/post?text=${encodeURIComponent(text)}`;
+---
+
+<hr />
+
+<p>おつかれさまでした！ここまでの感想を、ぜひXにポストしてください。</p>
+
+<LinkButton href={href} target="_blank" rel="noopener noreferrer" icon="external">
+	感想をXにポストする
+</LinkButton>

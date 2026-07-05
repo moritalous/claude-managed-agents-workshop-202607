@@ -1,0 +1,297 @@
+---
+title: 3. Gmailと連携するエージェント
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../components/ShareOnX.astro';
+
+ボールトに追加する認証情報には、[1. コンソールでエージェントを作成](/intermediate/01_console/)で使った「Bearerトークン」のほかに、「**MCP OAuth**」というタイプがあります。OAuth認証を使うMCPサーバー向けのタイプで、コンソールには**Gmail**（`https://gmailmcp.googleapis.com/mcp/v1`）などのプリセットが用意されています。
+
+このページでは、Gmailの下書きを作ってくれるエージェントを作成します。あわせて、ツールの実行前にユーザーの承認を求める **権限ポリシー（`always_ask`）** も体験します。
+
+<Aside type="danger" title="認証情報はワークスペース全体で共有されます">
+ボールトのクレデンシャルはワークスペース単位で共有されます。Gmailを接続すると、**このボールトを紐付けて作られたセッションのエージェントは、あなたのGmailにアクセスできる**ようになります。そして、そのようなセッションは、同じワークスペースのAPIキーを持つ人なら誰でも作成できます。個人のGmailで試す場合は**自分専用のワークスペース**で行い、試し終わったらクレデンシャルをアーカイブしましょう。
+</Aside>
+
+## 1. コンソールでGmailを「接続」する
+
+Bearerトークンと違い、MCP OAuthのプリセットでは、OAuthの認可フローをコンソールが代行してくれます。
+
+<Steps>
+
+1. 「認証情報ボールト」でボールトを開き、「クレデンシャルを追加」をクリックします。
+
+1. タイプに「MCP OAuth」を選択し、MCPサーバーのプリセットから「Gmail」を選択します。
+
+    ![](images/2026-07-05-05-17-37.png)
+
+1. 注意事項に同意して「接続」をクリックすると、Googleの認可画面が開きます。アカウントを選んで許可します。
+
+    ![](images/2026-07-05-05-18-38.png)
+
+    <Aside>
+    ダイアログの「アクセストークン」「OAuthクライアント認証情報」の欄はどちらも任意です。空のままなら、Anthropicが用意したOAuthアプリ（Claude for Gmail）で認可されます。
+    </Aside>
+
+1. トークンがボールトに保管されます。有効期限が切れたときの更新もAnthropicが自動で行います。
+
+</Steps>
+
+## 2. プロジェクトを作成
+
+プロジェクトを作成し、そのフォルダーに移動して、Claude SDKをインストールします。
+
+```shell
+uv init gmail-agent
+cd gmail-agent
+uv add anthropic
+```
+
+## 3. エージェントを作成する
+
+<Steps>
+
+1. プロジェクトのフォルダーに`setup_gmail.py`を作成し、以下の内容を保存します。
+
+    ```python title="setup_gmail.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. Gmailの認証情報が入ったボールトを探す
+    ###############################
+    gmail_vault_id = None
+    for vault in client.beta.vaults.list():
+        for cred in client.beta.vaults.credentials.list(vault_id=vault.id):
+            url = getattr(cred.auth, "mcp_server_url", "") or ""
+            if "gmailmcp.googleapis.com" in url:
+                gmail_vault_id = vault.id
+                print(f"Gmail認証情報を発見: vault={vault.id} ({vault.display_name}) / credential={cred.id}")
+                break
+        if gmail_vault_id:
+            break
+
+    if not gmail_vault_id:
+        raise SystemExit("Gmailの認証情報が見つかりません。コンソールのボールトで「接続」してください。")
+
+    ###############################
+    # 2. 環境を作成（MCPサーバーへのネットワークアクセスを許可）
+    ###############################
+    environment = client.beta.environments.create(
+        name="Gmail-environment",
+        config={
+            "type": "cloud",
+            "networking": {"type": "limited", "allow_mcp_servers": True},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 3. エージェントを作成（権限ポリシーは always_ask = 実行前に承認を求める）
+    ###############################
+    agent = client.beta.agents.create(
+        name="Gmail Agent",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="Gmailの検索・要約・下書き作成を行うエージェント。",
+        system="あなたはGmailを扱うアシスタントです。メールの内容を要約するときは、送信者・件名・要点を簡潔にまとめてください。日本語で応答してください。",
+        mcp_servers=[{"name": "gmail", "type": "url", "url": "https://gmailmcp.googleapis.com/mcp/v1"}],
+        tools=[
+            {
+                "type": "mcp_toolset",
+                "mcp_server_name": "gmail",
+                "default_config": {
+                    "enabled": True,
+                    "permission_policy": {"type": "always_ask"},
+                },
+            }
+        ],
+    )
+    print(f"agent:       {agent.id}")
+
+    with open("ids_gmail.json", "w") as f:
+        json.dump(
+            {
+                "vault_id": gmail_vault_id,
+                "environment_id": environment.id,
+                "agent_id": agent.id,
+            },
+            f,
+            indent=2,
+        )
+    print("IDをids_gmail.jsonに保存しました")
+    ```
+
+    ポイントは2つです。
+
+    - **ボールトの自動検出** ・・・ ボールトと認証情報を一覧し、GmailのMCPサーバーURLを持つクレデンシャルが入ったボールトを探しています。手順1でコンソールから作った認証情報も、コードからは他の認証情報と同じように参照できることが分かります
+    - **`permission_policy: always_ask`** ・・・ これまでの`always_allow`と違い、エージェントがツールを実行する前に**承認を求めて一時停止**する設定です。メールという実データを扱うので、安全側に倒しています
+
+1. スクリプトを実行します。
+
+    ```shell
+    uv run setup_gmail.py
+    ```
+
+    ```text
+    Gmail認証情報を発見: vault=vlt_011Cch75YvJtEDJBgShwtgfb (Vault) / credential=vcrd_01Cwkza...
+    environment: env_01RcwVQvCdgfidJqSN32Ypua
+    agent:       agent_01Rs4ReLgJkee8xkX18Mdxpp
+    IDをids_gmail.jsonに保存しました
+    ```
+
+</Steps>
+
+## 4. エージェントと対話する
+
+<Steps>
+
+1. プロジェクトのフォルダーに`run_gmail.py`を作成し、以下の内容を保存します。
+
+    ```python title="run_gmail.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_gmail.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # 1. セッションを作成（エージェント・環境・Gmailのボールトを組み合わせる）
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+        vault_ids=[ids["vault_id"]],
+    )
+    print(f"session: {session.id}")
+    print("エージェントと対話します。exit と入力すると終了します。\n")
+
+
+    ###############################
+    # 2. 1ターン分の送信と受信（承認待ちになったらy/Nで確認）
+    ###############################
+    def run_turn(text: str) -> None:
+        pending_tools = {}  # event_id -> (ツール名, 引数)
+
+        # ストリームを開いてからメッセージを送信
+        stream = client.beta.sessions.events.stream(session_id=session.id)
+        client.beta.sessions.events.send(
+            session.id,
+            events=[{"type": "user.message", "content": [{"type": "text", "text": text}]}],
+        )
+
+        for event in stream:
+            if event.type == "agent.mcp_tool_use":
+                if getattr(event, "evaluated_permission", None) == "ask":
+                    # 承認が必要なツール呼び出し。IDを控えておく
+                    pending_tools[event.id] = (event.name, event.input)
+                else:
+                    print(f"[ツール: {event.name}]")
+            elif event.type == "agent.message":
+                for block in event.content:
+                    if block.type == "text":
+                        print(block.text)
+            elif event.type == "session.status_idle":
+                if event.stop_reason.type == "requires_action":
+                    # 承認待ち。ツールの内容を表示してユーザーに確認する
+                    for event_id in event.stop_reason.event_ids:
+                        name, tool_input = pending_tools.get(event_id, ("(不明)", {}))
+                        print("\n----- 承認リクエスト -----")
+                        print(f"ツール: {name}")
+                        print(f"引数:   {json.dumps(tool_input, ensure_ascii=False, indent=2)}")
+                        answer = input("実行を許可しますか? [y/N] ").strip().lower()
+                        confirmation = {
+                            "type": "user.tool_confirmation",
+                            "tool_use_id": event_id,
+                            "result": "allow" if answer == "y" else "deny",
+                        }
+                        if answer != "y":
+                            confirmation["deny_message"] = "ユーザーが実行を拒否しました。"
+                        client.beta.sessions.events.send(session.id, events=[confirmation])
+                        print("回答を送信しました。続行します...\n")
+                else:
+                    break
+            elif event.type == "session.status_terminated":
+                print("セッションが終了しました。")
+                raise SystemExit(1)
+        stream.close()
+
+
+    ###############################
+    # 3. 最初のタスクを送信し、そのあとは対話を続ける
+    ###############################
+    run_turn(
+        "自分宛てに「明日の予定の確認」というメールの下書きを作成してください。"
+        "本文は簡潔にお任せします。送信はしないでください。"
+        "宛先のメールアドレスなど、分からないことがあれば私に質問してください。"
+    )
+
+    while True:
+        user_input = input("\nあなた> ").strip()
+        if user_input == "exit":
+            break
+        if not user_input:
+            continue
+        run_turn(user_input)
+
+    print("\n完了しました")
+    ```
+
+    <Aside>
+    `always_ask`のツール呼び出しは、`evaluated_permission: "ask"`付きの`agent.mcp_tool_use`イベントとして流れてきて、セッションは`stop_reason`が`requires_action`のアイドル状態で待ちます。こちらから`user.tool_confirmation`イベント（`result`は`allow`/`deny`。`deny_message`を添えると理由がエージェントに伝わります）を送ると再開します。`tool_use_id`に渡すのはツール呼び出し**イベントのID**（`sevt_`で始まる）です。
+    </Aside>
+
+1. スクリプトを実行します。エージェントに質問されたら`あなた>`に回答し、承認リクエストが出たら**引数の中身を確認してから**`y`で許可します。
+
+    ```shell
+    uv run run_gmail.py
+    ```
+
+    ```text
+    session: sesn_01WCk8w6uAJPuoP7QG32G4tr
+    エージェントと対話します。exit と入力すると終了します。
+
+    下書きを作成させていただきたいのですが、確認させていただきたいことが1つあります：
+
+    **ご自身のメールアドレスを教えていただけますか？**
+
+    あなた> あなたのメールアドレス
+
+    ----- 承認リクエスト -----
+    ツール: create_draft
+    引数:   {
+      "body": "お疲れ様です。\n\n明日の予定について確認したいことがあります。...",
+      "subject": "明日の予定の確認",
+      "to": [
+        "あなたのメールアドレス"
+      ]
+    }
+    実行を許可しますか? [y/N] y
+    回答を送信しました。続行します...
+
+    完了しました！「明日の予定の確認」というメールの下書きを作成いたしました。
+
+    あなた> exit
+    ```
+
+1. Gmailの「下書き」フォルダーを開くと、エージェントが作成した下書きが保存されています。承認リクエストで表示されたものと同じ件名・本文であることが確認できます。
+
+</Steps>
+
+<Aside type="tip">
+承認リクエストで`N`（拒否）と答えてみるのも面白い実験です。拒否の理由（`deny_message`）がエージェントに伝わり、エージェントが対応を変えることを確認できます。
+</Aside>
+
+## まとめ
+
+- ボールトの「MCP OAuth」タイプには**Gmailなどのプリセット**があり、コンソールの「接続」ボタンがOAuthの認可とトークンの保管・更新を代行してくれます。
+- コンソールで作った認証情報も、コードからは他の認証情報と同じように参照できます（OAuth系はコンソールで「接続」して作り、コードからはボールトIDで参照する、という分担）。
+- `always_ask`にすると、ツール実行前に`agent.mcp_tool_use`（承認待ち）→`user.tool_confirmation`（allow/deny）という往復が発生します。実データを扱う操作を、**実行前に中身を見てから**許可できます。
+- Gmailのような個人アカウントの認証情報を扱うときは、**ワークスペース共有**の性質に注意してください。
+
+<ShareOnX />

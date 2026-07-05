@@ -1,0 +1,80 @@
+---
+title: Claude Managed Agents Workshop
+description: クラウドで動く自律エージェントを、自分の手で作って動かすハンズオンワークショップ。
+template: splash
+hero:
+  title: Claude Managed Agents Workshop
+  tagline: 画面操作からコードまで、クラウドで動く自律エージェントを体験しよう。<br />このコンテンツは、2026年7月31日(金)に大阪で開催するClaude Community Eventsのワークショップで使用します。
+  image:
+    file: ../../assets/claude-osaka.png
+    alt: Claude Osaka
+  actions:
+    - text: 事前準備を始める
+      link: /guide/preparation/
+      icon: right-arrow
+    - text: イベントページ(Luma)
+      link: https://luma.com/claude-e5yf
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+## このワークショップで体験すること
+
+**Claude Managed Agents**を使って、Anthropicが管理するクラウドサンドボックス上で動く自律エージェントを、自分の手で作成・実行します。エージェントループもサンドボックスも自前で作る必要はありません。コンソールの画面操作だけで動かす初級から、CLI・Python SDKで作る中級、スライド生成やニュースサイトの自動更新に挑戦する上級まで、自分のペースで進められます。
+
+<CardGrid>
+	<Card title="タイムテーブル" icon="clock">
+		- 18:30 受付開始
+		- 19:00 オープニング・会場説明
+		- 19:10 Claude Managed Agentsの解説
+		- 19:30 ハンズオン（個人ペース）
+		- 20:45 ネットワーキング
+		- 21:00 クロージング
+	</Card>
+	<Card title="持ち物・事前準備" icon="laptop">
+		- ノートパソコン（電源の用意はありますが数に限りがあります）
+		- [Claude Platform](https://platform.claude.com)のアカウント（事前作成をお願いします）
+		- APIクレジット（イベントで配布予定です）
+
+		詳しくは[事前準備](/guide/preparation/)を確認してください。
+	</Card>
+	<Card title="学べること" icon="star">
+		- Managed Agentsの基本概念（エージェント・環境・セッション）
+		- コンソール・CLI・Python SDK、3通りのエージェント作成
+		- MCPサーバー接続と認証情報ボールト
+		- スキルでのスライド生成、スケジュール実行、成果物の取り出し
+	</Card>
+	<Card title="参加後のお願い" icon="pencil">
+		本イベントに関連する**ブログ投稿**をお願いしています。ハンズオンで作ったエージェントの話、ハマったポイント、応用アイデアなど、なんでも大歓迎です。
+	</Card>
+</CardGrid>
+
+## 進め方
+
+<LinkCard
+	title="事前準備"
+	description="アカウント作成・ワークスペース作成など。イベント前に済ませておくとスムーズです。"
+	href="/guide/preparation/"
+/>
+<LinkCard
+	title="Claude Managed Agentsとは"
+	description="冒頭の解説パートの内容。仕組みと主要な概念を押さえます。"
+	href="/guide/introduction/"
+/>
+<LinkCard
+	title="初級：最初のエージェント"
+	description="コードを書かずに、コンソールの画面操作だけで最初のエージェントを動かします。"
+	href="/beginner/01_quickstart/"
+/>
+<LinkCard
+	title="中級：コンソール・CLI・SDK"
+	description="MCPサーバーにつながるリサーチエージェントを、3通りの方法で作ります。"
+	href="/intermediate/01_console/"
+/>
+<LinkCard
+	title="上級：応用ハンズオン"
+	description="スライド生成レポートや、ニュースサイトの自動更新エージェントに挑戦します。"
+	href="/advanced/01_report/"
+/>

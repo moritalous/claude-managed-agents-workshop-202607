@@ -1,0 +1,218 @@
+---
+title: 1. 分析レポートエージェント
+description: サンドボックスのビルトインツールとpptxスキルを使い、データ分析からスライド作成・ダウンロードまでを行うエージェントを作る。
+sidebar:
+  order: 1
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../components/ShareOnX.astro';
+
+データを分析して、スライド(PPTX)のレポートを作ってくれるエージェントを作ります。uvと認証のセットアップは[3. SDKでエージェントを作成](/intermediate/03_sdk/)と同じ前提で、このページ用に新しいプロジェクトを作って進めます。
+
+このページでは、Managed Agentsの次の要素を新しく使います。
+
+| 要素 | 役割 |
+|------|------|
+| ビルトインツール(`agent_toolset`) | サンドボックス内でbash・ファイル操作・Web検索などを実行するツール一式 |
+| 環境の`packages` | サンドボックスにaptやpip、npmのパッケージを事前インストールする設定 |
+| スキル(`skills`) | ドキュメント作成などの専門ワークフローをエージェントに教える仕組み |
+| セッションアウトプット | エージェントが`/mnt/session/outputs/`に保存したファイルを手元にダウンロードする仕組み |
+
+## 1. プロジェクトを作成
+
+プロジェクトを作成し、そのフォルダーに移動して、Claude SDKをインストールします。
+
+```shell
+uv init report-agent
+cd report-agent
+uv add anthropic
+```
+
+## 2. リソースを作成
+
+<Steps>
+
+1. プロジェクトのフォルダーに`setup_report.py`を作成し、以下の内容を保存します。
+
+    ```python title="setup_report.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. 環境を作成（pptxスキルの依存関係を事前インストール）
+    ###############################
+    environment = client.beta.environments.create(
+        name="Report-environment-adv",
+        config={
+            "type": "cloud",
+            "packages": {
+                "apt": ["libreoffice-impress", "poppler-utils", "fonts-noto-cjk"],
+                "pip": ["markitdown[pptx]", "Pillow"],
+                "npm": ["pptxgenjs"],
+            },
+            "networking": {"type": "unrestricted"},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 2. エージェントを作成（ビルトインツール一式 + pptxスキル）
+    ###############################
+    agent = client.beta.agents.create(
+        name="Report Agent ADV",
+        model="claude-sonnet-5",
+        description="データ分析とスライドレポート作成を行うエージェント。",
+        system="あなたはデータ分析とレポート作成のアシスタントです。分析にはサンドボックスのbashとPythonを使い、スライドの作成にはpptxスキルに従ってください。成果物は必ず /mnt/session/outputs/ に保存してください。日本語で応答してください。",
+        tools=[{"type": "agent_toolset_20260401", "default_config": {"enabled": True}}],
+        skills=[{"type": "anthropic", "skill_id": "pptx"}],
+    )
+    print(f"agent:       {agent.id}")
+
+    with open("ids_report.json", "w") as f:
+        json.dump({"environment_id": environment.id, "agent_id": agent.id}, f, indent=2)
+    print("IDをids_report.jsonに保存しました")
+    ```
+
+    設定のポイントは3つです。
+
+    - **`packages`** ・・・ [pptxスキルの定義](https://github.com/anthropics/skills/blob/main/skills/pptx/SKILL.md)が必要とする依存関係(LibreOffice、Poppler、markitdown、pptxgenjs)と日本語フォントを事前インストールしています。apt・cargo・gem・go・npm・pipに対応し、同じ環境を使うセッション間でキャッシュされます
+    - **`agent_toolset_20260401`** ・・・ bash、read/write/edit、glob/grep、Web検索・取得というビルトインツールの一式です。これまでのMCPツールと違い、サンドボックスの中で実行されます
+    - **`skills`** ・・・ Anthropicが提供する事前構築スキル(`pptx`のほか`xlsx`、`docx`、`pdf`)は、`skill_id`を書くだけで使えます
+
+1. スクリプトを実行します。
+
+    ```shell
+    uv run setup_report.py
+    ```
+
+</Steps>
+
+## 3. レポートを作らせる
+
+<Steps>
+
+1. プロジェクトのフォルダーに`report.py`を作成し、以下の内容を保存します。
+
+    ```python title="report.py"
+    import json
+    import pathlib
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_report.json") as f:
+        ids = json.load(f)
+
+    # セッションを作成
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+    )
+    print(f"session: {session.id}")
+
+    # ストリームを開いてからタスクを送信
+    stream = client.beta.sessions.events.stream(session_id=session.id)
+
+    client.beta.sessions.events.send(
+        session.id,
+        events=[
+            {
+                "type": "user.message",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": (
+                            "架空のたこ焼き店の1年分の月別売上データ（販売数と売上金額）をCSVで作成し、"
+                            "傾向を分析してください。その結果を、タイトル・売上推移グラフ・分析まとめの"
+                            "3枚のスライドからなる日本語のPPTXレポートにして、"
+                            "/mnt/session/outputs/report.pptx に保存してください。"
+                        ),
+                    }
+                ],
+            }
+        ],
+    )
+    print("タスクを送信しました。完了まで数分かかります...\n")
+
+    for event in stream:
+        if event.type == "agent.tool_use":
+            print(f"[ツール: {event.name}]")
+        elif event.type == "agent.message":
+            for block in event.content:
+                if block.type == "text":
+                    print(block.text)
+        elif event.type == "session.status_idle":
+            if event.stop_reason.type != "requires_action":
+                break
+        elif event.type == "session.status_terminated":
+            break
+    stream.close()
+
+    # 成果物をダウンロード
+    print("\n成果物を確認しています...")
+    files = client.beta.files.list(
+        scope_id=session.id,
+        betas=["managed-agents-2026-04-01"],
+    )
+    for f in files.data:
+        print(f"- {f.filename} ({f.size_bytes} bytes)")
+        content = client.beta.files.download(f.id)
+        out = pathlib.Path(f.filename).name
+        content.write_to_file(out)
+        print(f"  -> {out} に保存しました")
+    ```
+
+    最後のブロックが成果物のダウンロードです。エージェントが`/mnt/session/outputs/`に保存したファイルは、Files APIで`scope_id`にセッションIDを指定すると一覧・ダウンロードできます。
+
+1. スクリプトを実行します。初回はサンドボックスの準備(LibreOfficeなどのインストール)とスライド作成で5〜10分ほどかかります。
+
+    ```shell
+    uv run report.py
+    ```
+
+    ```text
+    session: sesn_016pxZpFV5ny8Wj14fU2wVgD
+    タスクを送信しました。完了まで数分かかります...
+
+    [ツール: bash]
+    良いデータができました。次に分析を行います。
+    [ツール: bash]
+    pptxgenjsが利用可能です。たこ焼き店にふさわしいカラーパレットでスライドを作成します。
+    [ツール: write]
+    [ツール: bash]
+    コンテンツQAとビジュアルQAを実施します。
+    ...
+    線グラフの補間（lineSmooth）がデータを誇張している点と、スライド3の金色テキストのコントラストが弱い点を修正します。
+    [ツール: edit]
+    ...
+    以下の成果物を作成しました。
+    ...
+
+    成果物を確認しています...
+    - report.pptx (26240 bytes)
+      -> report.pptx に保存しました
+    - takoyaki_monthly_sales.csv (344 bytes)
+      -> takoyaki_monthly_sales.csv に保存しました
+    ```
+
+    <Aside type="tip">
+    ログを眺めていると、エージェントがスライドを画像に変換して自分の目で確認し、「グラフがデータを誇張している」「テキストのコントラストが弱い」といった問題を自分で見つけて修正していく様子が分かります。コンソールのセッション画面でトレースを見るのもおすすめです。
+    </Aside>
+
+1. ダウンロードされた`report.pptx`をPowerPointなどで開いて、仕上がりを確認してみましょう。
+
+</Steps>
+
+## まとめ
+
+- 環境の`packages`で、apt・pip・npmのパッケージをサンドボックスに事前インストールできます(同じ環境を使うセッション間でキャッシュされます)。
+- ビルトインツール(`agent_toolset`)を有効にすると、エージェントがサンドボックス内でbashやファイル操作を実行できます。
+- **スキル**は`skill_id`を書くだけで、スライド作成のような専門ワークフローをエージェントに教えられます。
+- エージェントが`/mnt/session/outputs/`に保存した成果物は、Files APIに`scope_id`(セッションID)を指定して一覧・ダウンロードできます。
+
+<ShareOnX />

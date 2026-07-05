@@ -1,0 +1,12 @@
+:root {
+	--sl-font: 'LINE Seed JP', sans-serif;
+	--sl-color-accent-low: #43180b;
+	--sl-color-accent: #c15f3c;
+	--sl-color-accent-high: #f3c3ae;
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent-low: #f6ddd2;
+	--sl-color-accent: #a94e2c;
+	--sl-color-accent-high: #582410;
+}

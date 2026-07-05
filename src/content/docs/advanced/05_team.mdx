@@ -1,0 +1,364 @@
+---
+title: 5. チームを組むエージェント
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../components/ShareOnX.astro';
+
+**マルチエージェント**を使うと、1つのセッションの中で複数のエージェントを協調させられます。このページでは、**調査係**(Jina MCPでWeb調査)と**報告係**(Gmail MCPで下書き作成)を率いる**コーディネーター**を作り、「ニュースを調べてメールの下書きにまとめる」仕事をチームでこなさせます。
+
+このページでは、Managed Agentsの次の要素を新しく使います。
+
+| 要素 | 役割 |
+|------|------|
+| マルチエージェント(`multiagent`) | エージェントに、委任先エージェントのリスト(roster)を持たせる設定 |
+| セッションスレッド | サブエージェントごとに独立した実行コンテキスト。並列に動作する |
+
+<Aside>
+このページは、Jina AIの認証情報([1. コンソールでエージェントを作成](/intermediate/01_console/))と、Gmailの認証情報([3. Gmailと連携するエージェント](/advanced/03_gmail/))がボールトに入っている前提です。
+</Aside>
+
+## なぜチームにするのか
+
+機能だけ見れば、1つのエージェントにJinaとGmailの両方のMCPサーバーを持たせても同じことはできます。それでもチームに分ける価値は、公式ドキュメントが挙げる3つのパターンに表れています。
+
+- **並列化** ・・・ 独立したサブタスクを同時にファンアウトし、コーディネーターが統合する
+- **専門化** ・・・ 専用のプロンプトとツールを持つエージェントに振り分ける。**1つのエージェントに全能力を持たせない**ことで、ツールと認証情報の届く範囲をエージェント単位に絞れる
+- **エスカレーション** ・・・ 難しいサブタスクだけ高性能なモデルに任せる
+
+今回の構成はこの3つを全部含んでいます。コーディネーター(claude-sonnet-5)は**Web検索もメール操作もできず**、調査係(claude-haiku-4-5)はJinaだけ、報告係(claude-haiku-4-5)はGmailだけに触れます。各エージェントは**セッションスレッド**という独立したコンテキストで動くので、調査の長いログがコーディネーターの会話を汚すこともありません。
+
+## 1. プロジェクトを作成
+
+プロジェクトを作成し、そのフォルダーに移動して、Claude SDKをインストールします。
+
+```shell
+uv init team-agent
+cd team-agent
+uv add anthropic
+```
+
+## 2. チームを作成する
+
+<Steps>
+
+1. プロジェクトのフォルダーに`setup_team.py`を作成し、以下の内容を保存します。
+
+    ```python title="setup_team.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. JinaとGmailの認証情報が入ったボールトを探す
+    ###############################
+    vault_ids = []
+    for vault in client.beta.vaults.list():
+        for cred in client.beta.vaults.credentials.list(vault_id=vault.id):
+            url = getattr(cred.auth, "mcp_server_url", "") or ""
+            if ("mcp.jina.ai" in url or "gmailmcp.googleapis.com" in url) and vault.id not in vault_ids:
+                vault_ids.append(vault.id)
+                print(f"認証情報を発見: vault={vault.id} ({vault.display_name}) / {url}")
+
+    if not vault_ids:
+        raise SystemExit("JinaまたはGmailの認証情報が見つかりません。")
+
+    ###############################
+    # 2. 環境を作成（MCPサーバーへのネットワークアクセスを許可）
+    ###############################
+    environment = client.beta.environments.create(
+        name="Team-environment",
+        config={
+            "type": "cloud",
+            "networking": {"type": "limited", "allow_mcp_servers": True},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 3. 調査係を作成（Jina MCPだけを持つ）
+    ###############################
+    researcher = client.beta.agents.create(
+        name="Team Researcher",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="Web検索と記事の読み取りで調査を行うリサーチャー。",
+        system=(
+            "あなたはリサーチャーです。依頼されたトピックをsearch_webで検索し、"
+            "有望な記事はread_urlで本文まで読み込んでください。"
+            "調査結果は、出典URL付きの簡潔な日本語の要約として返してください。"
+        ),
+        mcp_servers=[{"name": "jina", "type": "url", "url": "https://mcp.jina.ai/v1"}],
+        tools=[
+            {
+                "type": "mcp_toolset",
+                "mcp_server_name": "jina",
+                "default_config": {"enabled": True, "permission_policy": {"type": "always_allow"}},
+            }
+        ],
+    )
+    print(f"researcher:  {researcher.id}")
+
+    ###############################
+    # 4. 報告係を作成（Gmail MCPだけを持つ。実行前承認あり）
+    ###############################
+    reporter = client.beta.agents.create(
+        name="Team Reporter",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="Gmailの下書きを作成する報告係。",
+        system=(
+            "あなたは報告係です。渡された内容を、読みやすい日本語のメールにまとめて"
+            "Gmailの下書きとして作成してください。メールの送信は行わないでください。"
+        ),
+        mcp_servers=[{"name": "gmail", "type": "url", "url": "https://gmailmcp.googleapis.com/mcp/v1"}],
+        tools=[
+            {
+                "type": "mcp_toolset",
+                "mcp_server_name": "gmail",
+                "default_config": {"enabled": True, "permission_policy": {"type": "always_ask"}},
+            }
+        ],
+    )
+    print(f"reporter:    {reporter.id}")
+
+    ###############################
+    # 5. コーディネーターを作成（外部への権限なし。調査係と報告係に委任する）
+    ###############################
+    coordinator = client.beta.agents.create(
+        name="Research Team Coordinator",
+        model={"id": "claude-sonnet-5", "speed": "standard"},
+        description="調査係と報告係を率いるコーディネーター。",
+        system=(
+            "あなたはリサーチチームのコーディネーターです。"
+            "調査はTeam Researcherに、メール下書きの作成はTeam Reporterに委任してください。"
+            "あなた自身はWeb検索もメール操作もできません。"
+            "複数のトピックを調査するときは、調査係を並行して動かしてください。"
+            "最後に結果を統合して、日本語でユーザーに報告してください。"
+        ),
+        tools=[
+            {
+                "type": "agent_toolset_20260401",
+                "default_config": {"enabled": True},
+                "configs": [
+                    {"name": "web_search", "enabled": False},
+                    {"name": "web_fetch", "enabled": False},
+                ],
+            }
+        ],
+        multiagent={
+            "type": "coordinator",
+            "agents": [
+                {"type": "agent", "id": researcher.id},
+                {"type": "agent", "id": reporter.id},
+            ],
+        },
+    )
+    print(f"coordinator: {coordinator.id}")
+
+    with open("ids_team.json", "w") as f:
+        json.dump(
+            {
+                "vault_ids": vault_ids,
+                "environment_id": environment.id,
+                "coordinator_id": coordinator.id,
+            },
+            f,
+            indent=2,
+        )
+    print("IDをids_team.jsonに保存しました")
+    ```
+
+    ポイントは3つです。
+
+    - **`multiagent.agents`が委任先のリスト(roster)** です。既存のエージェントをIDで登録するだけでチームになります(委任できるのは1段まで、登録は最大20エージェント)
+    - **ツールと認証情報はエージェント単位** です。Jinaに触れるのは調査係だけ、Gmailに触れるのは報告係だけ。コーディネーターはビルトインツールの`web_search`/`web_fetch`も個別設定で無効にしてあり、自分では外に出られません
+    - **モデルの使い分け** ・・・ 統合と判断を担うコーディネーターだけ`claude-sonnet-5`、作業係は`claude-haiku-4-5`にしています
+
+1. スクリプトを実行します。
+
+    ```shell
+    uv run setup_team.py
+    ```
+
+</Steps>
+
+## 3. チームを動かす
+
+<Steps>
+
+1. プロジェクトのフォルダーに`run_team.py`を作成し、以下の内容を保存します。冒頭の`TO_ADDRESS`は自分のメールアドレスに置き換えてください。
+
+    ```python title="run_team.py"
+    import json
+
+    from anthropic import Anthropic
+
+    # メール下書きの宛先（自分のメールアドレスに置き換えてください）
+    TO_ADDRESS = "ここにあなたのメールアドレス"
+
+    client = Anthropic()
+
+    with open("ids_team.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # 1. セッションを作成（コーディネーター・環境・ボールトを組み合わせる）
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["coordinator_id"],
+        environment_id=ids["environment_id"],
+        vault_ids=ids["vault_ids"],
+    )
+    print(f"session: {session.id}")
+    print(f"コンソール: https://platform.claude.com/workspaces/default/sessions/{session.id}")
+    print("エージェントチームと対話します。exit と入力すると終了します。\n")
+
+
+    def text_of(content) -> str:
+        return "".join(block.text for block in content if block.type == "text")
+
+
+    ###############################
+    # 2. 1ターン分の送信と受信（チームの動きを表示し、承認待ちはy/Nで確認）
+    ###############################
+    def run_turn(text: str) -> None:
+        pending_tools = {}  # event_id -> (ツール名, 引数, スレッドID)
+
+        stream = client.beta.sessions.events.stream(session_id=session.id)
+        client.beta.sessions.events.send(
+            session.id,
+            events=[{"type": "user.message", "content": [{"type": "text", "text": text}]}],
+        )
+
+        for event in stream:
+            if event.type == "session.thread_created":
+                print(f"[スレッド作成: {event.agent_name}]")
+            elif event.type == "agent.thread_message_sent":
+                summary = text_of(event.content).replace("\n", " ")[:80]
+                print(f"[→ {event.to_agent_name} へ依頼] {summary}...")
+            elif event.type == "agent.thread_message_received":
+                summary = text_of(event.content).replace("\n", " ")[:80]
+                print(f"[← {event.from_agent_name} から結果] {summary}...")
+            elif event.type == "agent.mcp_tool_use":
+                if getattr(event, "evaluated_permission", None) == "ask":
+                    thread_id = getattr(event, "session_thread_id", None)
+                    pending_tools[event.id] = (event.name, event.input, thread_id)
+                else:
+                    print(f"[ツール: {event.name}]")
+            elif event.type == "agent.message":
+                for block in event.content:
+                    if block.type == "text":
+                        print(block.text)
+            elif event.type == "session.status_idle":
+                if event.stop_reason.type == "requires_action":
+                    for event_id in event.stop_reason.event_ids:
+                        if event_id not in pending_tools:
+                            continue  # すでに回答済みの承認リクエストはスキップ
+                        name, tool_input, thread_id = pending_tools.pop(event_id)
+                        print("\n----- 承認リクエスト -----")
+                        print(f"ツール: {name}")
+                        print(f"引数:   {json.dumps(tool_input, ensure_ascii=False, indent=2)}")
+                        answer = input("実行を許可しますか? [y/N] ").strip().lower()
+                        confirmation = {
+                            "type": "user.tool_confirmation",
+                            "tool_use_id": event_id,
+                            "result": "allow" if answer == "y" else "deny",
+                        }
+                        if thread_id:
+                            confirmation["session_thread_id"] = thread_id
+                        if answer != "y":
+                            confirmation["deny_message"] = "ユーザーが実行を拒否しました。"
+                        client.beta.sessions.events.send(session.id, events=[confirmation])
+                        print("回答を送信しました。続行します...\n")
+                else:
+                    break
+            elif event.type == "session.status_terminated":
+                print("セッションが終了しました。")
+                raise SystemExit(1)
+        stream.close()
+
+
+    ###############################
+    # 3. 最初のタスクを送信し、そのあとは対話を続ける
+    ###############################
+    run_turn(
+        "今日の生成AI関連のニュースを2件調査して、それぞれ2〜3行で要約してください。"
+        f"その要約を、{TO_ADDRESS} 宛てのメール下書きにまとめてください（送信はしないでください）。"
+    )
+
+    while True:
+        user_input = input("\nあなた> ").strip()
+        if user_input == "exit":
+            break
+        if not user_input:
+            continue
+        run_turn(user_input)
+
+    print("\n完了しました")
+    ```
+
+    これまでの対話スクリプトとの違いは、**マルチエージェント専用のイベント**を表示していることです。
+
+    | イベント | 意味 |
+    |------|------|
+    | `session.thread_created` | サブエージェントのスレッドが作られた |
+    | `agent.thread_message_sent` | コーディネーターがサブエージェントへ依頼を送った |
+    | `agent.thread_message_received` | サブエージェントの結果がコーディネーターに届いた |
+
+    また、サブエージェント(報告係)の承認リクエストは、**セッション本体のストリームにクロスポスト**されてきます。返信の`user.tool_confirmation`には、リクエスト元の`session_thread_id`を添えます。同じ承認リクエストが2回届くことがあるため、回答済みのIDはスキップしています。
+
+1. スクリプトを実行します。委任の流れがイベントとして見え、下書き作成の場面では[3. Gmailと連携するエージェント](/advanced/03_gmail/)と同じ承認リクエストが表示されます。
+
+    ```shell
+    uv run run_team.py
+    ```
+
+    ```text
+    session: sesn_012EBVy3rLmecShnTGTU1PxZ
+    エージェントチームと対話します。exit と入力すると終了します。
+
+    [スレッド作成: Team Researcher]
+    [→ Team Researcher へ依頼] 今日（現在の日付時点)の生成AI（Generative AI）関連のニュースを2件調査してください...
+    リサーチャーに調査を依頼しました。結果が届き次第、内容を確認してReporterにメール下書き作成を依頼します。
+    [← Team Researcher から結果] 2026年7月5日時点での生成AI関連ニュース調査を完了しました。以下2件のニュースを報告します...
+    [スレッド作成: Team Reporter]
+    [→ Team Reporter へ依頼] （あなたのメールアドレス）宛てに、Gmailの下書き（送信はしない）を作成してください...
+
+    ----- 承認リクエスト -----
+    ツール: create_draft
+    引数:   {
+      "body": "いつもお疲れ様です。\n\n本日も生成AI関連の重要なニュースをまとめてご報告させていただきます。...",
+      "subject": "本日の生成AI関連ニュース まとめ（2026年7月5日）",
+      "to": [
+        "（あなたのメールアドレス）"
+      ]
+    }
+    実行を許可しますか? [y/N] y
+    回答を送信しました。続行します...
+
+    [← Team Reporter から結果] Gmailの下書き作成が完了しました。 【作成内容】 - 宛先：（あなたのメールアドレス） - 件名：本日の生成AI関連ニュース まとめ...
+    Team Researcherの調査とTeam Reporterのメール下書き作成が完了しました。結果を以下にまとめます。
+    ...
+
+    あなた> exit
+
+    完了しました
+    ```
+
+1. Gmailの「下書き」フォルダーに、チームが作ったニュースまとめの下書きができています。コンソールのセッション画面を開くと、コーディネーターと各スレッドのやり取りを画面上でも追えます。
+
+</Steps>
+
+## まとめ
+
+- **`multiagent.agents`(roster)に既存エージェントをIDで登録するだけ**で、コーディネーターが委任できるチームになります。エージェントは再利用できる部品です。
+- **ツールと認証情報の範囲はエージェント単位**です。コーディネーターには外部への権限を持たせず、調査係はJinaだけ、報告係はGmailだけ、と最小権限で分担できます(ボールトはセッション全体に効くので1回の紐付けでOK)。
+- サブエージェントは**セッションスレッド**として並列に動き、その様子は`session.thread_created`や`agent.thread_message_sent`/`received`イベントで観察できます。
+- サブエージェントの**承認リクエストもセッション本体にクロスポスト**されるので、人間の承認ゲートは1箇所で管理できます。
+
+<Aside>
+制約として、委任は**1段まで**(サブエージェントからの再委任は不可)、同時スレッドは最大25、登録できるのは最大20エージェントです。また、登録したサブエージェントはコーディネーターの作成時点のバージョンに固定されるため、サブエージェントを更新したらコーディネーターも更新する必要があります。
+</Aside>
+
+<ShareOnX />

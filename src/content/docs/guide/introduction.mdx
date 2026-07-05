@@ -1,0 +1,110 @@
+---
+title: Claude Managed Agentsとは
+description: Claude Managed Agentsの概要と主要な概念。ワークショップ冒頭の解説パートの内容です。
+sidebar:
+  order: 2
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+**Claude Managed Agents**は、Claudeを自律型エージェントとして実行するためのプラットフォームです。
+
+これまでAIエージェントを作るには、エージェントループ（LLM呼び出し → ツール実行 → 結果を返す、の繰り返し）、ツールの実行環境、サンドボックス、状態管理をすべて自前で構築する必要がありました。Managed Agentsでは、それらをAnthropicがまるごと管理します。開発者がやることは「エージェントの設定」「メッセージの送信」だけです。
+
+## Messages APIとの違い
+
+**Messages API**は、プロンプトを送るとモデルの応答が1回返ってくる、Claudeを呼び出す最も基本的なAPIです。
+
+|  | Messages API | Claude Managed Agents |
+| --- | --- | --- |
+| **概要** | モデルへの直接的なプロンプトアクセス | マネージドインフラ上で動く、構成可能なエージェントハーネス |
+| **エージェントループ** | 自分で実装する | Anthropic側で用意 |
+| **ツール実行** | 自分のコードで実行する | クラウドサンドボックス内で実行 |
+| **状態** | ステートレス（毎回全履歴を送る） | ステートフル（履歴・ファイルがサーバー側に保持される） |
+| **最適な用途** | きめ細かな制御、カスタムループ | 長時間実行タスク、非同期処理 |
+
+参考: [Claude Managed Agentsの概要](https://platform.claude.com/docs/ja/managed-agents/overview)
+
+## 4つの概念
+
+Managed Agentsはこの4つを押さえれば理解できます。今日のハンズオンでも、この順番で作っていきます。
+
+| 概念 | 説明 |
+| --- | --- |
+| **エージェント(Agent)** | モデル・システムプロンプト・ツール・MCPサーバー・スキルをまとめた、再利用可能でバージョン管理される設定 |
+| **環境(Environment)** | セッションが実行される場所の設定。Anthropic管理のクラウドサンドボックス、または自社インフラ上のセルフホスト型 |
+| **セッション(Session)** | 環境内で実行中のエージェントのインスタンス。タスクを実行し、成果物を生成する |
+| **イベント(Event)** | アプリケーションとエージェントの間で交換されるメッセージ（ユーザーメッセージ、ツール実行の通知、ステータス更新など） |
+
+参考: [エージェント](https://platform.claude.com/docs/ja/managed-agents/agent-setup)・[環境](https://platform.claude.com/docs/ja/managed-agents/environments)・[セッション](https://platform.claude.com/docs/ja/managed-agents/sessions)・[イベント](https://platform.claude.com/docs/ja/managed-agents/events-and-streaming)
+
+## 動作の流れ
+
+<Steps>
+
+1. **エージェントを作成する**
+
+    モデル、システムプロンプト、ツールを定義します。一度作れば何度でもエージェントIDにより参照できます。
+
+2. **環境を作成する**
+
+    エージェントの実行場所（サンドボックスの構成）を設定します。
+
+3. **セッションを開始する**
+
+    エージェントと環境を参照するセッションを起動します。セッションごとに独立したLinuxコンテナが割り当てられます。
+
+4. **イベントを送信し、レスポンスをストリーミングする**
+
+    ユーザーメッセージを送ると、Claudeが自律的にツールを実行し、結果をSSEでストリーミング返却します。
+
+5. **軌道修正または中断する**
+
+    実行を止めなくても、追加のメッセージを送って軌道修正できます。割り込んで中断させることもできます。
+
+</Steps>
+
+参考: [クイックスタート](https://platform.claude.com/docs/ja/managed-agents/quickstart)
+
+## 組み込みツール
+
+エージェント設定に`agent_toolset_20260401`を指定すると、以下のツール一式が有効になります。
+
+| ツール | 説明 |
+| --- | --- |
+| `bash` | サンドボックス内でシェルコマンドを実行 |
+| `read` / `write` / `edit` | ファイルの読み取り・書き込み・編集 |
+| `glob` / `grep` | ファイル検索・テキスト検索 |
+| `web_search` / `web_fetch` | Web検索とURLからのコンテンツ取得 |
+
+個別に有効/無効を切り替えたり、実行前に承認を求める権限ポリシーを設定したりできます。このほか、MCPサーバー接続、自作のカスタムツール、スキルも利用できます。
+
+参考: [ツール](https://platform.claude.com/docs/ja/managed-agents/tools)
+
+## セッションはコンソールでリアルタイムで確認
+
+セッションを作成すると、Claude Platformのコンソールにトレースビューが用意されます。エージェントがどんなツールをどんな引数で呼んだのか、リアルタイムで確認できます。セッションIDが分かれば次のURLで開けるので、**ターミナルとコンソールの両方を並べて眺める**のがおすすめです。
+
+```text
+https://platform.claude.com/workspaces/default/sessions/{セッションID}
+```
+
+参考: [セッションの操作](https://platform.claude.com/docs/ja/managed-agents/session-operations)
+
+## 料金
+
+1. セッション内でモデルが消費したトークンが通常のAPI料金
+
+    プロンプトキャッシングやコンパクションによる最適化は[ハーネスに組み込み済み](https://platform.claude.com/docs/ja/managed-agents/overview)
+
+    | モデル | 入力 / 1Mトークン | 出力 / 1Mトークン |
+    | --- | --- | --- |
+    | Claude Opus 4.8 (`claude-opus-4-8`) | $5.00 | $25.00 |
+    | Claude Sonnet 5 (`claude-sonnet-5`) | $3.00（2026-08-31まで$2.00） | $15.00（同$10.00） |
+    | Claude Haiku 4.5 (`claude-haiku-4-5`) | $1.00 | $5.00 |
+
+2. セッションの稼働時間（1時間あたり$0.08）
+
+    稼働時間はエージェントが実際に動いている（`running`）間だけミリ秒単位で計測され、入力待ち（アイドル）の間は課金されません。
+
+参考: [料金](https://platform.claude.com/docs/ja/about-claude/pricing)

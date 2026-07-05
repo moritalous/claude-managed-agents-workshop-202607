@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+	<rect width="64" height="64" rx="14" fill="#c15f3c"/>
+	<g fill="#faf4ec" font-family="'LINE Seed JP', 'Hiragino Sans', 'Yu Gothic UI', sans-serif" font-weight="bold" text-anchor="middle">
+		<text x="32" y="30" font-size="26">CC</text>
+		<text x="32" y="56" font-size="23">大阪</text>
+	</g>
+</svg>

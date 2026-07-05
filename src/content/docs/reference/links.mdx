@@ -1,0 +1,33 @@
+---
+title: リンク集・次のステップ
+description: 公式ドキュメントへのリンクと、開発を続けるためのツール・コミュニティの案内。
+sidebar:
+  order: 2
+---
+
+import { LinkCard, CardGrid } from '@astrojs/starlight/components';
+
+## 公式ドキュメント
+
+<CardGrid>
+	<LinkCard title="Managed Agents概要" href="https://platform.claude.com/docs/ja/managed-agents/overview" description="まずはここから。日本語ドキュメントがあります。" />
+	<LinkCard title="クイックスタート" href="https://platform.claude.com/docs/ja/managed-agents/quickstart" description="今日のハンズオンのベースになった公式チュートリアル。" />
+	<LinkCard title="エージェントを定義する" href="https://platform.claude.com/docs/ja/managed-agents/agent-setup" description="バージョン管理、更新、アーカイブのライフサイクル。" />
+	<LinkCard title="ツール" href="https://platform.claude.com/docs/ja/managed-agents/tools" description="組み込みツールの構成、カスタムツール、権限ポリシー。" />
+	<LinkCard title="環境" href="https://platform.claude.com/docs/ja/managed-agents/environments" description="packages・networkingの設定、セルフホスト型サンドボックス。" />
+	<LinkCard title="イベントとストリーミング" href="https://platform.claude.com/docs/ja/managed-agents/events-and-streaming" description="イベントタイプの全リスト、再接続、割り込みの詳細。" />
+	<LinkCard title="スケジュールデプロイメント" href="https://platform.claude.com/docs/ja/managed-agents/scheduled-deployments" description="cronスケジュールでの定期実行。" />
+	<LinkCard title="メモリ" href="https://platform.claude.com/docs/ja/managed-agents/memory" description="メモリストアで、セッションを跨ぐ記憶を持たせる。" />
+	<LinkCard title="リファレンス" href="https://platform.claude.com/docs/ja/managed-agents/reference" description="イベントタイプ、レート制限などの一覧表。" />
+</CardGrid>
+
+## 開発を続けるためのツール
+
+- **Claude Codeから始める** ・・・ 最新のClaude Codeで`/claude-api managed-agents-onboard`を実行すると、対話形式でエージェントのセットアップをガイドしてくれます
+- **Anthropic CLI (`ant`)** ・・・ エージェントや環境をYAMLで定義してバージョン管理する運用に便利です。[CLIドキュメント](https://platform.claude.com/docs/en/api/sdks/cli)
+- **SDKはPython以外にも** ・・・ TypeScript / Java / Go / C# / Ruby / PHPで同じことができます。[クイックスタート](https://platform.claude.com/docs/ja/managed-agents/quickstart)に全言語のコード例があります
+
+## コミュニティ
+
+- [イベントページ(Luma)](https://luma.com/claude-e5yf) ・・・ 今後のイベント情報もこちらから
+- 会場で交換した縁を大事に。次回のイベントでお会いしましょう！

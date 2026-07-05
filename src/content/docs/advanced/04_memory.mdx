@@ -1,0 +1,302 @@
+---
+title: 4. 記憶するエージェント
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../components/ShareOnX.astro';
+
+セッションは基本的に使い捨てで、終了すると会話の内容は次のセッションに引き継がれません。**メモリストア**を使うと、エージェントがセッションを跨いで記憶を持てるようになります。このページでは、あなたのことを覚えてくれるパーソナルアシスタントを作ります。
+
+このページでは、Managed Agentsの次の要素を新しく使います。
+
+| 要素 | 役割 |
+|------|------|
+| メモリストア | セッションを跨いで永続する、エージェント用のテキストファイル置き場 |
+| メモリストアのリソース紐付け | セッション作成時に`resources`でストアをサンドボックスにマウントする仕組み |
+
+## 1. プロジェクトを作成
+
+プロジェクトを作成し、そのフォルダーに移動して、Claude SDKをインストールします。
+
+```shell
+uv init memory-agent
+cd memory-agent
+uv add anthropic
+```
+
+## 2. リソースを作成
+
+<Steps>
+
+1. プロジェクトのフォルダーに`setup_memory.py`を作成し、以下の内容を保存します。
+
+    ```python title="setup_memory.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. メモリストアを作成（descriptionはエージェントに渡される）
+    ###############################
+    store = client.beta.memory_stores.create(
+        name="personal-memory",
+        description="ユーザーに関する記憶。名前、好み、仕事の文脈、過去の依頼内容などを保存する。",
+    )
+    print(f"memory_store: {store.id}")
+
+    ###############################
+    # 2. 環境を作成（MCPもパッケージも不要な最小構成）
+    ###############################
+    environment = client.beta.environments.create(
+        name="Memory-environment",
+        config={"type": "cloud"},
+    )
+    print(f"environment:  {environment.id}")
+
+    ###############################
+    # 3. エージェントを作成（メモリの読み書きにはビルトインツールが必要）
+    ###############################
+    agent = client.beta.agents.create(
+        name="Memory Agent",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="ユーザーのことを覚えるパーソナルアシスタント。",
+        system=(
+            "あなたはユーザー専属のパーソナルアシスタントです。"
+            "会話の中でユーザーに関する情報（名前、好み、仕事の文脈、依頼の傾向など）を知ったら、"
+            "指示されなくても、writeツールを使ってメモリディレクトリ（/mnt/memory/ 配下）に"
+            "Markdownファイルとして保存してください。ファイルに書き込むまでは「記録した」ことになりません。"
+            "また、依頼に取り組む前には必ずメモリディレクトリの中身を読み、ユーザーに合わせた対応をしてください。"
+            "日本語で応答してください。"
+        ),
+        tools=[{"type": "agent_toolset_20260401", "default_config": {"enabled": True}}],
+    )
+    print(f"agent:        {agent.id}")
+
+    with open("ids_memory.json", "w") as f:
+        json.dump(
+            {
+                "memory_store_id": store.id,
+                "environment_id": environment.id,
+                "agent_id": agent.id,
+            },
+            f,
+            indent=2,
+        )
+    print("IDをids_memory.jsonに保存しました")
+    ```
+
+    ポイントは3つです。
+
+    - **メモリストアの`description`はエージェントに渡されます**。「何のための記憶か」を人間向けではなくエージェント向けに書きます
+    - メモリはサンドボックスに**ファイルとしてマウント**されるため、読み書きには**ビルトインツール**(`agent_toolset`)が必要です
+    - 環境はネットワーク設定もパッケージもない最小構成です。メモリに外部アクセスは不要です
+
+    <Aside type="tip">
+    システムプロンプトの「**ファイルに書き込むまでは『記録した』ことになりません**」は重要な一文です。公式ドキュメントに記載がある仕様ではありませんが、この一文がない状態だとエージェントが「記録しました」と答えながら実際にはファイルを書かないことがありました。記録の実体がファイル書き込みであることを明示してからは、確実に書くようになりました。
+    </Aside>
+
+1. スクリプトを実行します。
+
+    ```shell
+    uv run setup_memory.py
+    ```
+
+</Steps>
+
+## 3. 教えて、覚えさせる
+
+<Steps>
+
+1. プロジェクトのフォルダーに`chat_memory.py`を作成し、以下の内容を保存します。
+
+    ```python title="chat_memory.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_memory.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # 1. セッションを作成（メモリストアをリソースとして紐付ける）
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+        resources=[
+            {
+                "type": "memory_store",
+                "memory_store_id": ids["memory_store_id"],
+                "access": "read_write",
+                "instructions": "ユーザーに関する記憶。会話で知った事実や好みは、指示がなくても記録すること。依頼に取り組む前に必ず確認すること。",
+            }
+        ],
+    )
+    print(f"session: {session.id}")
+    print("エージェントと対話します。exit と入力すると終了します。\n")
+
+
+    ###############################
+    # 2. 1ターン分の送信と受信
+    ###############################
+    def run_turn(text: str) -> None:
+        stream = client.beta.sessions.events.stream(session_id=session.id)
+        client.beta.sessions.events.send(
+            session.id,
+            events=[{"type": "user.message", "content": [{"type": "text", "text": text}]}],
+        )
+        for event in stream:
+            if event.type == "agent.tool_use":
+                print(f"[ツール: {event.name}]")
+            elif event.type == "agent.message":
+                for block in event.content:
+                    if block.type == "text":
+                        print(block.text)
+            elif event.type == "session.status_idle":
+                if event.stop_reason.type != "requires_action":
+                    break
+            elif event.type == "session.status_terminated":
+                break
+        stream.close()
+
+
+    ###############################
+    # 3. 対話ループ
+    ###############################
+    while True:
+        user_input = input("あなた> ").strip()
+        if user_input == "exit":
+            break
+        if not user_input:
+            continue
+        run_turn(user_input)
+        print()
+
+    print("完了しました")
+    ```
+
+    メモリストアは、セッション作成時に`resources`で紐付けます。`access`は`read_write`(読み書き)と`read_only`(参照のみ)から選べ、`instructions`でこのセッションでの使い方を指示できます。紐付けたストアはサンドボックスの`/mnt/memory/ストア名/`にマウントされ、マウント情報はシステムプロンプトに自動で追加されます。
+
+1. スクリプトを実行し、**「覚えて」とは言わずに**自己紹介をしてみます。`[ツール: write]`が表示されれば、エージェントが自発的にメモリへ書き込んだ証拠です。
+
+    ```shell
+    uv run chat_memory.py
+    ```
+
+    ```text
+    session: sesn_01V6uP82wu7cjWHdghEyiCH2
+    エージェントと対話します。exit と入力すると終了します。
+
+    あなた> 私は山田です。大阪でエンジニアをしています。文章を頼むときは、箇条書きで簡潔なものが好みです。
+    [ツール: write]
+    山田さんですね。ご紹介いただきありがとうございます！
+
+    大阪でエンジニアとして活動されているのですね。文章依頼時は箇条書きで簡潔な形式をご希望とのこと、
+    了解しました。今後のご依頼では、その点を意識して対応させていただきます。
+
+    あなた> exit
+    完了しました
+    ```
+
+</Steps>
+
+## 4. 新しいセッションで確認する
+
+<Steps>
+
+1. `chat_memory.py`を**もう一度実行**します。まったく新しいセッション(会話履歴なし)ですが、エージェントはメモリを読んでから応答します。
+
+    ```shell
+    uv run chat_memory.py
+    ```
+
+    ```text
+    session: sesn_016XtdU3RLZB34ydhRnZkrAD
+    エージェントと対話します。exit と入力すると終了します。
+
+    あなた> 私の好みに合う形式で、社内勉強会の告知文を作ってください。
+    メモリを確認して、あなたの好みを把握してから告知文を作成させていただきます。
+    [ツール: bash]
+    [ツール: read]
+    ありがとうございます。箇条書きで簡潔な形式をご希望とのことですね。社内勉強会の告知文を、
+    いくつかのバージョンでご提案します。
+
+    ## 案1：シンプル版
+
+    **【社内勉強会開催のお知らせ】**
+
+    - **テーマ**：（テーマを入力してください）
+    - **開催日時**：○年○月○日（○）○時～○時
+    ...
+    ```
+
+    前のセッションで伝えた「箇条書きで簡潔」という好みを覚えていて、その形式で出力してくれます。会話の履歴はセッションごとに独立していますが、**メモリはストアに永続化されているのでセッションを跨いで引き継がれる**、というのがポイントです。
+
+</Steps>
+
+## 5. 記憶の中身をのぞく
+
+エージェントが何を覚えたのかは、ホスト側からAPIで確認できます。
+
+<Steps>
+
+1. プロジェクトのフォルダーに`peek_memory.py`を作成し、実行します。
+
+    ```python title="peek_memory.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    with open("ids_memory.json") as f:
+        ids = json.load(f)
+
+    store_id = ids["memory_store_id"]
+
+    # ストア内のメモリを一覧し、それぞれの中身を表示する
+    for item in client.beta.memory_stores.memories.list(store_id, path_prefix="/"):
+        if item.type != "memory":
+            continue
+        memory = client.beta.memory_stores.memories.retrieve(item.id, memory_store_id=store_id)
+        print(f"===== {memory.path} =====")
+        print(memory.content)
+        print()
+    ```
+
+    ```shell
+    uv run peek_memory.py
+    ```
+
+    ```text
+    ===== /user_profile.md =====
+    # ユーザープロフィール
+
+    ## 基本情報
+    - 名前：山田
+    - 職業：エンジニア
+    - 勤務地：大阪
+
+    ## 好み・スタイル
+    - 文章依頼時：箇条書きで簡潔な形式を希望
+    ```
+
+    エージェントの「記憶」の正体は、**ただのMarkdownファイル**です。ホスト側からは`memories.update`で修正したり、`memories.delete`で削除したりもできます。また、メモリへのすべての変更には**バージョン**が記録されるので、いつ・どのセッションが何を書いたかを監査できます。
+
+</Steps>
+
+## まとめ
+
+- **メモリストア**をセッションの`resources`で紐付けると、`/mnt/memory/`にファイルとしてマウントされ、エージェントがビルトインツールで読み書きします。書いた内容はストアに永続化され、**次のセッションに引き継がれます**。
+- 自発的に記録させるには、**「ファイルに書き込むまでは記録にならない」ことをプロンプトで明示**するのが確実です。
+- 記憶の実体はMarkdownファイルで、ホスト側からAPIで閲覧・修正・削除でき、変更履歴(バージョン)も監査できます。
+
+<Aside type="caution">
+`read_write`のメモリは便利な反面、エージェントが信頼できない入力(Webページの内容など)を扱う場合、プロンプトインジェクションによって**悪意ある内容を記憶に書き込まれ、以降のセッションがそれを信じてしまう**リスクがあります。参照するだけのストアは`read_only`で紐付けるのが[公式ドキュメント](https://platform.claude.com/docs/ja/managed-agents/memory)の推奨です。また、1メモリ100kB・1ストア2,000件・1セッション8ストアという上限があります。
+</Aside>
+
+<ShareOnX />
