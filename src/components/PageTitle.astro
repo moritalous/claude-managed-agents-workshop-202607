@@ -1,0 +1,19 @@
+---
+import Default from '@astrojs/starlight/components/PageTitle.astro';
+import { LinkButton } from '@astrojs/starlight/components';
+
+const { id } = Astro.locals.starlightRoute;
+const isEnglish = Astro.currentLocale === 'en';
+const markdownHref = `${import.meta.env.BASE_URL}/${id}.md`;
+---
+
+<Default />
+<LinkButton href={markdownHref} target="_blank" rel="noopener noreferrer" icon="document" variant="secondary" class="markdown-view-button">
+	{isEnglish ? 'View as Markdown' : 'Markdownで表示'}
+</LinkButton>
+
+<style>
+	.markdown-view-button {
+		margin-top: 1rem;
+	}
+</style>

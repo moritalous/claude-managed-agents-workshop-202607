@@ -47,6 +47,9 @@ export default defineConfig({
 				'@fontsource/line-seed-jp/700.css',
 				'./src/styles/custom.css',
 			],
+			components: {
+				PageTitle: './src/components/PageTitle.astro',
+			},
 			social: [
 				{ icon: 'rocket', label: 'イベントページ (Luma)', href: 'https://luma.com/claude-e5yf' },
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/moritalous' },
