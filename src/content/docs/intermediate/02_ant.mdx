@@ -345,42 +345,82 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 <Steps>
 
-1. セッションにメッセージを送信し、エージェントの応答を確認します。
+1. ターミナルを2つ使い、片方でイベントをリアルタイムに受信しながら、もう片方からメッセージを送信します。まず、これまで使ってきたウィンドウ(**ターミナル1**)でイベントのストリーム受信を開始します。
 
     <Tabs syncKey="os">
 
     <TabItem label="Windows">
-    メッセージを送信します(コマンドは1行です)。
-
     ```shell
-    ./ant beta:sessions:events send --session-id $SESSION_ID --event '{type: user.message, content: [{type: text, text: "最新のRAGに関する論文を検索して"}]}'
+    ./ant beta:sessions:events stream --session-id $SESSION_ID --format jsonl
     ```
-
-    エージェントの処理には1分前後かかります。進行中の様子は、コンソールの「セッション」メニューからこのセッションを開くとリアルタイムに確認できます。
-
-    しばらく待ってから、イベント履歴で回答を確認します。イベントが1行ずつ表示され、`agent.message`の行の`text`が回答です。まだ処理中だった場合は、時間をおいて再実行してください。
-
-    ```shell
-    ./ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id $SESSION_ID
-    ```
-
-    :::note
-    本来は`./ant beta:sessions:events stream --session-id $SESSION_ID`でイベントをリアルタイムに受信できますが、antバージョン1.16.0のWindows版にはストリームが受信できない問題があるため、この手順では履歴の取得で確認しています。
-    :::
     </TabItem>
 
     <TabItem label="macOS">
-    メッセージを送信し、続けてイベントをストリームします。ストリームには接続後に発生したイベントだけが流れるため、1行目(送信)と2行目(ストリーム)を**2行まとめてコピーして**実行してください。
+    ```shell
+    ant beta:sessions:events stream --session-id "$SESSION_ID" --format jsonl
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    コマンドは実行したまま、イベントが届くのを待ち受けます。`--format jsonl`を付けているので、イベントは1行ずつJSON形式で表示されます。
+
+1. 新しいウィンドウ(**ターミナル2**)を開き、送信の準備をします。変数はウィンドウごとに独立しているため、ターミナル2にも`$SESSION_ID`を設定します。`ここにセッションID`の部分は、[5. セッションを作成](#5-セッションを作成)で表示した`sesn_`から始まるIDに置き換えてください(ターミナル1の画面をさかのぼると確認できます)。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    `ant`を展開したフォルダーで新しくPowerShellを起動し、以下を実行します。
 
     ```shell
-    ant beta:sessions:events send --session-id "$SESSION_ID" --event '{type: user.message, content: [{type: text, text: "最新のRAGに関する論文を検索して"}]}'
-    ant beta:sessions:events stream --session-id "$SESSION_ID"
+    $OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    $SESSION_ID = "ここにセッションID"
     ```
+    </TabItem>
 
-    MCPツールの呼び出し（`agent.mcp_tool_use`）に続いて、`agent.message`イベントで回答が流れてきます。`session.status_idle`が表示されたら完了です。ストリームは`Ctrl+C`で終了できます。
+    <TabItem label="macOS">
+    新しくターミナルを開き、以下を実行します。
+
+    ```shell
+    SESSION_ID="ここにセッションID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. ターミナル2からメッセージを送信します(コマンドは1行です)。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant beta:sessions:events send --session-id $SESSION_ID --event '{type: user.message, content: [{type: text, text: "最新のRAGに関する論文を検索して"}]}'
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ant beta:sessions:events send --session-id "$SESSION_ID" --event '{type: user.message, content: [{type: text, text: "最新のRAGに関する論文を検索して"}]}'
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    送信すると、ターミナル1に`user.message`をはじめとするイベントが流れ始めます。MCPツールの呼び出し（`agent.mcp_tool_use`）に続いて、`agent.message`イベントの`text`として回答が届きます。`session.status_idle`が表示されたら完了です。
+
+    回答を確認できたら、ターミナル1で`Ctrl+C`を押してストリームを終了してください。
 
     表示を見逃した場合は、イベント履歴から確認できます。イベントが1行ずつ表示され、`agent.message`の行の`text`が回答です。
 
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id $SESSION_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
     ```shell
     ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id "$SESSION_ID"
     ```
