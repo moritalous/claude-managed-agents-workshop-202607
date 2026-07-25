@@ -345,42 +345,82 @@ Run the commands in PowerShell in the folder where you extracted `ant` on Window
 
 <Steps>
 
-1. Send a message to the session and check the agent's response.
+1. You will use two terminals: one receives events in real time while the other sends the message. First, start streaming events in the window you have been using so far (**terminal 1**).
 
     <Tabs syncKey="os">
 
     <TabItem label="Windows">
-    Send a message (the command is a single line).
-
     ```shell
-    ./ant beta:sessions:events send --session-id $SESSION_ID --event '{type: user.message, content: [{type: text, text: "Search for the latest papers on RAG"}]}'
+    ./ant beta:sessions:events stream --session-id $SESSION_ID --format jsonl
     ```
-
-    The agent takes around a minute to process. You can watch its progress in real time by opening this session from the "Sessions" menu in the console.
-
-    After waiting a while, check the answer in the event history. Events are printed one per line, and the `text` on the `agent.message` line is the answer. If the agent is still processing, wait and run the command again.
-
-    ```shell
-    ./ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id $SESSION_ID
-    ```
-
-    :::note
-    Normally you can receive events in real time with `./ant beta:sessions:events stream --session-id $SESSION_ID`, but the Windows build of ant version 1.16.0 has an issue where the stream cannot be received, so this walkthrough checks the event history instead.
-    :::
     </TabItem>
 
     <TabItem label="macOS">
-    Send a message, then stream the events. Since the stream only carries events that occur after you connect, **copy both lines together**—line 1 (send) and line 2 (stream)—and run them.
+    ```shell
+    ant beta:sessions:events stream --session-id "$SESSION_ID" --format jsonl
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    Leave the command running and let it wait for events to arrive. Because `--format jsonl` is set, events are printed one per line in JSON format.
+
+1. Open a new window (**terminal 2**) and get ready to send. Variables are independent per window, so set `$SESSION_ID` in terminal 2 as well. Replace `your session ID here` with the ID starting with `sesn_` that was displayed in [5. Create a session](#5-create-a-session) (you can find it by scrolling back through terminal 1).
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    Start a new PowerShell in the folder where you extracted `ant` and run the following.
 
     ```shell
-    ant beta:sessions:events send --session-id "$SESSION_ID" --event '{type: user.message, content: [{type: text, text: "Search for the latest papers on RAG"}]}'
-    ant beta:sessions:events stream --session-id "$SESSION_ID"
+    $OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    $SESSION_ID = "your session ID here"
     ```
+    </TabItem>
 
-    Following the MCP tool calls (`agent.mcp_tool_use`), the answer arrives in an `agent.message` event. When `session.status_idle` appears, the run is complete. You can stop the stream with `Ctrl+C`.
+    <TabItem label="macOS">
+    Open a new terminal and run the following.
+
+    ```shell
+    SESSION_ID="your session ID here"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. Send the message from terminal 2 (the command is a single line).
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant beta:sessions:events send --session-id $SESSION_ID --event '{type: user.message, content: [{type: text, text: "Search for the latest papers on RAG"}]}'
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ant beta:sessions:events send --session-id "$SESSION_ID" --event '{type: user.message, content: [{type: text, text: "Search for the latest papers on RAG"}]}'
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    Once you send it, events starting with `user.message` begin to flow in terminal 1. Following the MCP tool calls (`agent.mcp_tool_use`), the answer arrives as the `text` of an `agent.message` event. When `session.status_idle` appears, the run is complete.
+
+    After you have checked the answer, press `Ctrl+C` in terminal 1 to stop the stream.
 
     If you missed the output, you can check it in the event history. Events are printed one per line, and the `text` on the `agent.message` line is the answer.
 
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id $SESSION_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
     ```shell
     ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id "$SESSION_ID"
     ```
