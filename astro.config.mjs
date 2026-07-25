@@ -86,6 +86,7 @@ export default defineConfig({
 						{ label: 'リンク集・次のステップ', translations: { en: 'Links & Next Steps' }, slug: 'reference/links' },
 					],
 				},
+				{ label: 'アンケート', translations: { en: 'Survey' }, slug: 'reference/survey' },
 				{ label: '参加者のブログ', translations: { en: 'Participant Blogs' }, slug: 'reference/blogs' },
 			],
 		}),
