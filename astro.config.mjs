@@ -84,9 +84,9 @@ export default defineConfig({
 					items: [
 						{ label: 'トラブルシューティング', translations: { en: 'Troubleshooting' }, slug: 'reference/troubleshooting' },
 						{ label: 'リンク集・次のステップ', translations: { en: 'Links & Next Steps' }, slug: 'reference/links' },
-						{ label: '参加者のブログ', translations: { en: 'Participant Blogs' }, slug: 'reference/blogs' },
 					],
 				},
+				{ label: '参加者のブログ', translations: { en: 'Participant Blogs' }, slug: 'reference/blogs' },
 			],
 		}),
 	],

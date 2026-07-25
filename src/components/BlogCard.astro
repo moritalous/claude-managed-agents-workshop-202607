@@ -1,0 +1,81 @@
+---
+import { Icon } from '@astrojs/starlight/components';
+
+interface Props {
+	/** ハンドルネーム */
+	handle: string;
+	/** プロフィールリンク(Xのプロフィールなど、任意) */
+	profileUrl?: string;
+	/** ブログのタイトル */
+	title: string;
+	/** ブログのURL */
+	url: string;
+}
+
+const { handle, profileUrl, title, url } = Astro.props;
+---
+
+<article class="blog-card">
+	<p class="blog-card-title">
+		<a href={url} target="_blank" rel="noopener noreferrer">{title}</a>
+	</p>
+	<p class="blog-card-byline">
+		by{' '}
+		{profileUrl ? (
+			<a class="blog-card-handle" href={profileUrl} target="_blank" rel="noopener noreferrer">
+				{handle}
+				<Icon name="external" size="0.8em" />
+			</a>
+		) : (
+			<span>{handle}</span>
+		)}
+	</p>
+</article>
+
+<style>
+	.blog-card {
+		border: 1px solid var(--sl-color-hairline);
+		border-radius: 0.5rem;
+		padding: 0.75rem 1rem;
+		background-color: var(--sl-color-bg-nav);
+	}
+
+	.blog-card-title {
+		margin: 0 0 0.35rem 0;
+		font-weight: 600;
+		line-height: 1.3;
+	}
+
+	.blog-card-title a {
+		text-decoration: none;
+		color: var(--sl-color-white);
+	}
+
+	.blog-card-title a:hover {
+		color: var(--sl-color-accent-high);
+		text-decoration: underline;
+	}
+
+	.blog-card-byline {
+		margin: 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem 0.5rem;
+		font-size: var(--sl-text-xs);
+		color: var(--sl-color-gray-3);
+	}
+
+	.blog-card-handle {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.15rem;
+		color: var(--sl-color-gray-3);
+		text-decoration: none;
+	}
+
+	.blog-card-handle:hover {
+		color: var(--sl-color-accent-high);
+		text-decoration: underline;
+	}
+</style>

@@ -5,12 +5,18 @@ sidebar:
   order: 3
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Aside, LinkButton } from '@astrojs/starlight/components';
+import BlogCard from '../../../components/BlogCard.astro';
+import BlogCardGrid from '../../../components/BlogCardGrid.astro';
 
 ## ブログを書こう！
 
 <Aside type="tip" title="参加後のお願い">
-本イベントでは、参加後に**イベントに関連するブログ投稿**をお願いしています。書いたらXなどで`#ClaudeCommunityOsaka`を付けてシェアするか、運営まで教えてください。このページで紹介します。
+	本イベントでは、参加後に**イベントに関連するブログ投稿**をお願いしています。下のフォームから連絡いただければ、このページへの掲載とXでの紹介ポストをこちらで行います。もしご自身でXにポストする際は、`#ClaudeCommunityOsaka`を付けていただけると嬉しいです。
+
+	<LinkButton href="https://forms.gle/Gh2LTm7hoGyDQmMHA" target="_blank" rel="noopener noreferrer" icon="external">
+		ブログ掲載を連絡する
+	</LinkButton>
 </Aside>
 
 「何を書けばいいか分からない」という人向けの、そのまま使える切り口です。
@@ -24,6 +30,17 @@ import { Aside } from '@astrojs/starlight/components';
 
 イベント開催後に随時追加していきます。お楽しみに！
 
-{/* 掲載フォーマット(順不同・追加はこの下に):
-- [記事タイトル](URL) ・・・ ひとこと紹介(任意)
+{/* 1件目は表示フォーマットのサンプルです(タイトルの「(テスト)」で判別可能)。削除せずこのまま残してください。
+新しい投稿はこの下に、同じ形式で追加してください:
+<BlogCard handle="ハンドルネーム" profileUrl="https://x.com/handle" title="記事タイトル" url="https://example.com/post" />
+profileUrl は任意なので、無ければ省略してください。
 */}
+
+<BlogCardGrid>
+	<BlogCard
+		handle="moritalous"
+		profileUrl="https://x.com/moritalous"
+		title="（テスト）Claude Managed Agents Workshopを開催しました"
+		url="https://qiita.com/moritalous/private/0c877ef7149e0c9d54e5"
+	/>
+</BlogCardGrid>
