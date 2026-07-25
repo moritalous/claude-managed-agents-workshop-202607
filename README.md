@@ -3,6 +3,9 @@
 [![Built with Starlight](https://astro.badg.es/v2/built-with-starlight/tiny.svg)](https://starlight.astro.build)
 [![License: CC BY-NC-ND 4.0](https://licensebuttons.net/l/by-nc-nd/4.0/88x31.png)](https://creativecommons.org/licenses/by-nc-nd/4.0/deed.ja)
 
+> [!NOTE]
+> 本リポジトリはAnthropic公式のコンテンツではありません。有志（[moritalous](https://github.com/moritalous)）が作成した非公式の教材です。
+
 Claude Managed Agentsのハンズオン教材サイトです。クラウドで動く自律エージェントを、自分の手で作って動かしながら学びます。
 
 **📖 教材サイト**: https://moritalous.github.io/claude-managed-agents-workshop-202607/
