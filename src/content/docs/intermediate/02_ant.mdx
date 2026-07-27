@@ -78,6 +78,8 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
     :::note
     ブラウザで自動的にログイン処理が行われない場合は、ターミナルに出力されたURLにアクセスして手順に沿ってログインしてください。
+
+    `ant auth login --no-browser`（Windowsの場合は`./ant auth login --no-browser`）を実行すると、ブラウザの自動起動は行わず、ターミナルにURLが出力されます。認可するとブラウザにコードが表示されるので、それをターミナルに貼り付けます。
     :::
 
 </Steps>
