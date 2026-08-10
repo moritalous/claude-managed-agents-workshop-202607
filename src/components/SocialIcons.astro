@@ -1,0 +1,17 @@
+---
+import Default from '@astrojs/starlight/components/SocialIcons.astro';
+
+// ワークショップ会場で口頭・スライドから案内するための短縮URL
+const shortUrl = 'https://bit.ly/cma-workshop-osaka';
+---
+
+<span class="short-url">{shortUrl}</span>
+<Default />
+
+<style>
+	.short-url {
+		color: var(--sl-color-gray-2);
+		font-size: var(--sl-text-sm);
+		white-space: nowrap;
+	}
+</style>
