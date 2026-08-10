@@ -52,6 +52,7 @@ export default defineConfig({
 			},
 			social: [
 				{ icon: 'rocket', label: 'イベントページ (Luma)', href: 'https://luma.com/claude-e5yf' },
+				{ icon: 'comment-alt', label: 'Slido', href: 'https://app.sli.do/event/5naDwEp6TozKwhdwLZA422' },
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/moritalous' },
 			],
 			sidebar: [
