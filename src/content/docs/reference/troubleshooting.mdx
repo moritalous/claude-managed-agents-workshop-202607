@@ -5,10 +5,108 @@ sidebar:
   order: 1
 ---
 
-import { Aside } from '@astrojs/starlight/components';
+import { Steps, Aside } from '@astrojs/starlight/components';
 
 困ったら周りの方やClaude Codeに聞いてみよう！
 
 :::note
 もちろんイベントスタッフに聞いてもらっても大丈夫です！
 :::
+
+## Jina AIがクォータ制限で使えない
+
+**症状**: [1. コンソールでエージェントを作成](/intermediate/01_console/)以降でエージェントに質問すると、Jina AIのツール呼び出しが失敗する。無料枠のトークンを使い切った、あるいはレート制限に達したケースです。
+
+**対処**: Jina AIの代わりに[Firecrawl](https://www.firecrawl.dev/)のMCPサーバーを使います。Firecrawlも「Bearerトークン + カスタムURL」で接続できるので、**FirecrawlのAPIキーを取得したあと、教材の3箇所を読み替えるだけ**で動きます。
+
+### Firecrawlに登録してAPIキーを取得
+
+<Steps>
+
+1. https://www.firecrawl.dev/ を開きます。「Sign up」をクリックします。
+
+    ![](images/2026-08-11-06-53-08.png)
+
+1. 「Sign Up」タブが選択されていることを確認し、お好きな方法でアカウントを作成します。
+
+    ![](images/2026-08-11-06-54-49.png)
+
+1. ウィザードを進めます。
+
+    ![](images/2026-08-11-06-56-15.png)
+
+    ![](images/2026-08-11-06-56-55.png)
+
+1. 利用規約を確認しチェックを入れます。
+
+    ![](images/2026-08-11-06-57-28.png)
+
+1. APIキーをコピーします。
+
+    ![](images/2026-08-11-06-58-05.png)
+
+    <Aside>
+    ウィザードの途中でAPIキーをコピーしそびれた場合は、「API Keys」メニューからいつでも確認できます。
+
+    ![](images/2026-08-11-07-02-55.png)
+    </Aside>
+
+</Steps>
+
+### 読み替える3箇所
+
+| 箇所 | Jina AI | Firecrawl |
+|------|---------|-----------|
+| APIキーの取得元 | https://jina.ai/ | https://www.firecrawl.dev/ |
+| MCPサーバーのURL | `https://mcp.jina.ai/v1` | `https://mcp.firecrawl.dev/v2/mcp` |
+| ツール名 | `search_web` / `read_url` / `search_arxiv` など | `firecrawl_search` / `firecrawl_scrape` / `firecrawl_parse` / `firecrawl_map` / `firecrawl_crawl` |
+
+認証情報ボールトでのタイプ（**Bearerトークン**）、環境の設定（**MCPサーバーのネットワークアクセスを許可**）、セッションの作り方は、Jina AIのときと完全に同じです。
+
+
+### エージェント定義（Firecrawl版）
+
+[1. コンソールでエージェントを作成](/intermediate/01_console/)の「4. エージェントを作成」で、YAMLの代わりに以下を貼り付けてください。
+
+```yaml
+name: Firecrawl Web Research Agent
+model:
+  id: claude-haiku-4-5
+  speed: standard
+description: FirecrawlのMCPサーバーを使ったWeb検索・ページ読み取りのデモエージェント。
+system: あなたはFirecrawlの検索・読み取りツールを活用するリサーチアシスタントです。質問を受けたら、まずfirecrawl_searchで関連ソースを見つけ、その後firecrawl_scrapeで有望な結果の本文を取得してください。検索結果のスニペットだけに頼らないようにしてください。PDFなどのドキュメントはfirecrawl_parseで読み取れます。複数のソースから得た情報を組み合わせ、使用したURLを引用し、不確実な点や矛盾する情報がある場合は明確に示してください。特定のページの要約や事実抽出を求められた場合は、firecrawl_scrapeで直接そのページを読み取ってください。回答は簡潔かつ整理された形にし、事前知識ではなく取得したコンテンツに基づくようにしてください。
+mcp_servers:
+  - name: firecrawl
+    type: url
+    url: https://mcp.firecrawl.dev/v2/mcp
+tools:
+  - configs: []
+    default_config:
+      enabled: true
+      permission_policy:
+        type: always_allow
+    mcp_server_name: firecrawl
+    type: mcp_toolset
+skills: []
+metadata: {}
+```
+
+### 動作確認用の質問
+
+Firecrawlには`search_arxiv`に相当する論文検索ツールがないため、教材の「最新のRAGに関する論文を検索して」はそのままだと期待どおりに動きません。代わりにこちらを使ってください。
+
+```
+Claude Managed Agentsに関する最新のニュースを調べて、出典URL付きでまとめて
+```
+
+### 中級2以降・上級で読み替える箇所
+
+後続のページでもJina AIを前提にしたコードが出てきます。Firecrawlを使う場合は次を読み替えてください。
+
+- [2. CLIでエージェントを作成](/intermediate/02_ant/)・[3. SDKでエージェントを作成](/intermediate/03_sdk/)・[5. エージェントチームを作る](/advanced/05_team/)の`mcp_server_url` / `url`を`https://mcp.firecrawl.dev/v2/mcp`に、`mcp_servers`の`name`とツール設定の`mcp_server_name`を`firecrawl`に変更します
+- **`system`（システムプロンプト）も忘れずに差し替えてください。** これらのページのシステムプロンプトは`search_web`や`read_url`といったJina AIのツール名を名指ししています。ここを直さないと、接続は成功するのに**存在しないツールを呼ぼうとして失敗します**。上記のFirecrawl版YAMLの`system`を参考に書き換えてください
+- 表示名（`Jina-ai-cli`、`Jina-ai-sdk`など）は任意の名前で構いません
+
+<Aside type="caution">
+[5. エージェントチームを作る](/advanced/05_team/)のスクリプトは、ボールトを`"mcp.jina.ai" in url`という**文字列マッチで探しています**。このページはGmailの認証情報も前提にしているため、Firecrawlを使っていても**Gmail側がマッチしてしまい、エラーは出ません**。そのまま実行すると調査係だけが認証情報なしで動き、ツール呼び出しの段階で初めて失敗します。実行前に`"mcp.firecrawl.dev" in url`へ書き換えてください。
+</Aside>
