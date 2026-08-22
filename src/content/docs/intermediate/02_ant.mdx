@@ -84,6 +84,30 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 </Steps>
 
+<Aside type="caution" title="ワークショップが終わったらログアウトを">
+`ant auth login`の認証情報はマシンに残り、**Claude Codeで使われることがあります**。詳しくは[こちらのブログ](https://dev.classmethod.jp/articles/claude-max-credit-balance-too-low/)を参照してください。
+
+ワークショップが終わったら、次のコマンドでログアウトしておきましょう。
+
+<Tabs syncKey="os">
+
+<TabItem label="Windows">
+```shell
+./ant auth logout
+```
+</TabItem>
+
+<TabItem label="macOS">
+```shell
+ant auth logout
+```
+</TabItem>
+
+</Tabs>
+
+なお、このあとの手順([3. SDKでエージェントを作成](/intermediate/03_sdk/)や上級のページ)もこの認証情報を使います。**ログアウトはすべての手順が終わってから**にしてください。あとから続きをやるときは、もう一度`ant auth login`を実行すれば再開できます。
+</Aside>
+
 
 ## 2. 認証情報ボールトを作成
 

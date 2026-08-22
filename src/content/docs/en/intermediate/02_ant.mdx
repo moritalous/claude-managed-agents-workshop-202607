@@ -84,6 +84,30 @@ Every command on this page starts with `beta:`, as in `ant beta:agents create`. 
 
 </Steps>
 
+<Aside type="caution" title="Log out when the workshop is over">
+The credentials from `ant auth login` stay on your machine and **can end up being used by Claude Code**. For details, see [this blog post](https://dev.classmethod.jp/articles/claude-max-credit-balance-too-low/) (Japanese).
+
+Once the workshop is over, log out with the following command.
+
+<Tabs syncKey="os">
+
+<TabItem label="Windows">
+```shell
+./ant auth logout
+```
+</TabItem>
+
+<TabItem label="macOS">
+```shell
+ant auth logout
+```
+</TabItem>
+
+</Tabs>
+
+Note that the steps that follow ([3. Create an Agent with the SDK](/en/intermediate/03_sdk/) and the advanced pages) also use these credentials, so **log out only after you have finished everything**. When you come back to continue later, just run `ant auth login` again.
+</Aside>
+
 
 ## 2. Create a credential vault
 
