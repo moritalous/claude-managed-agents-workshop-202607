@@ -76,6 +76,11 @@ export default defineConfig({
 					items: [{ autogenerate: { directory: 'intermediate/'}}]
 				},
 				{
+					label: '中級（簡易版）',
+					translations: { en: 'Intermediate (Lite)' },
+					items: [{ autogenerate: { directory: 'intermediate-lite/'}}]
+				},
+				{
 					label: '上級',
 					translations: { en: 'Advanced' },
 					items: [{ autogenerate: { directory: 'advanced/'}}]

@@ -1,0 +1,133 @@
+---
+title: 1. Create an Agent in the Console
+description: A tutorial that assembles an AZ-900 practice-question agent from its parts, entirely through the Console UI, using the authless Microsoft Learn MCP server.
+sidebar:
+  order: 1
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+<Aside type="note" title="About the Intermediate (Lite) section">
+The [Intermediate](/en/intermediate/01_console/) section uses a Jina AI API key, but the key is sometimes unusable because of free-tier quota limits. This "Lite" version walks through the same flow (console → CLI → SDK) using the Microsoft Learn MCP server, which **needs no API key**. What you build is the same **AZ-900 practice-question agent** as in [Beginner 2](/en/beginner/02_blank/).
+</Aside>
+
+On this page, you will build the **AZ-900 practice-question agent** entirely through the Console UI, without writing a single line of code. In Beginner 2, the "Create" chat screen built the environment, agent, and session for you. Here you assemble the parts one by one yourself from the submenus of the "Agents" menu.
+
+The Microsoft Learn MCP server needs no authentication, so the **credential vault required in the Intermediate section is not needed**. You will create the following three components.
+
+| Component | Role |
+|------|------|
+| Environment | An execution environment that allows network access to the MCP server |
+| Agent | The agent itself, which asks practice questions using Microsoft Learn's tools |
+| Session | The execution unit that combines the environment and agent and runs them |
+
+## 1. Create an Environment
+
+<Steps>
+
+1. Select "Environments" from the submenu of the "Agents" menu, then click "Create environment".
+
+    ![](../../beginner/images/2026-10-27-environments-list.jpg)
+
+1. Leave hosting as "Cloud" and enter "Quiz-environment" as the name.
+
+    ![](../../intermediate-lite/images/2026-10-28-env-new.jpg)
+
+1. Scroll down to "Network". Select "Limited" and check "Allow MCP servers". Finally, click "Create environment".
+
+    ![](../../intermediate-lite/images/2026-10-28-env-new-network.jpg)
+
+    <Aside>
+    "Allowed hosts" can stay empty. This environment only reaches the outside world through the MCP server, so "Allow MCP servers" is all it needs.
+    </Aside>
+
+</Steps>
+
+## 2. Create an Agent
+
+<Steps>
+
+1. Select "Agents" from the submenu, then click "Create agent".
+
+    ![](../../beginner/images/2026-10-27-agents-list.jpg)
+
+1. Click "Raw" to the right of "Agent configuration" to switch to the YAML editor.
+
+    ![](../../intermediate/images/2026-10-27-agent-new.jpg)
+
+1. Delete everything in the editor, replace it with the following YAML, and click "Create agent".
+
+    ![](../../intermediate/images/2026-10-27-agent-new-raw.jpg)
+
+    ```yaml
+    name: AZ-900 Quiz Agent
+    model:
+      id: claude-haiku-4-5
+      speed: standard
+    description: A study assistant that asks AZ-900 (Azure Fundamentals) practice questions using up-to-date information from the Microsoft Learn MCP server.
+    system: |-
+      You are a study assistant that creates AZ-900 (Azure Fundamentals) practice questions using the Microsoft Learn MCP server. Refer to the latest official Microsoft Learn documentation and ask multiple-choice questions one at a time.
+
+      Rules:
+      - After presenting the question and the options, do not reveal the correct answer until the user responds.
+      - After the user answers, say whether they were right and give a one-line explanation of why each option is correct or incorrect.
+      - Provide three real Microsoft Learn documentation URLs that are useful for further study.
+      - Remember the user's previous answers (correct/incorrect, topic) within the conversation and prioritize topics they got wrong or are weak in for the next question.
+      - Ask only one question at a time and keep a brisk pace.
+    mcp_servers:
+      - name: microsoft-learn
+        type: url
+        url: https://learn.microsoft.com/api/mcp
+    tools:
+      - type: mcp_toolset
+        mcp_server_name: microsoft-learn
+        default_config:
+          enabled: true
+          permission_policy:
+            type: always_allow
+    skills: []
+    metadata: {}
+    ```
+
+    <Aside>
+    This is almost the same as the configuration auto-generated in Beginner 2, but the model is `claude-haiku-4-5` to keep costs down, and the tools are limited to the MCP server's (`mcp_toolset`). The built-in tools such as `web_search` (`agent_toolset_20260401`) are not used.
+    </Aside>
+
+</Steps>
+
+## 3. Create a Session
+
+<Steps>
+
+1. Select "Sessions" from the submenu, then click "Create session".
+
+    ![](../../beginner/images/2026-10-27-sessions-list.jpg)
+
+1. Set the agent to "AZ-900 Quiz Agent" and the environment to "Quiz-environment", then click "Create session". No credential vault is needed, so leave it empty.
+
+    ![](../../intermediate/images/2026-10-27-session-create.jpg)
+
+</Steps>
+
+## 4. Invoke the Agent
+
+<Steps>
+
+1. The session's detail page opens. Type "Give me one AZ-900 practice question" in the chat box at the bottom of the screen and send it.
+
+1. The agent calls the Microsoft Learn MCP tool (`microsoft_docs_search`) and asks a question. The inspector on the right shows session information, events, and tool calls.
+
+    ![](../../beginner/images/2026-10-27-session-page.jpg)
+
+1. Send an answer (for example `C`) in the same chat box, and you get a verdict and explanations.
+
+</Steps>
+
+## Summary
+
+- With an authless MCP server, you can run an agent with just three parts: **environment, agent, and session**. A credential vault is only needed for MCP servers that require an API key or OAuth.
+- Using an MCP server requires two things: (1) network access to MCP servers enabled in the environment ("Limited" + "Allow MCP servers"), and (2) `mcp_servers` and `mcp_toolset` definitions on the agent.
+- On the following pages, we will build the same setup with the CLI and the SDK.
+
+<ShareOnX />

@@ -1,0 +1,433 @@
+---
+title: 2. CLIでエージェントを作成
+description: 認証不要のMicrosoft Learn MCPサーバーを使うAZ-900練習問題エージェントを、Claude Platform CLI（ant）で作成するチュートリアル。
+sidebar:
+  order: 2
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../components/ShareOnX.astro';
+
+`ant`というClaude Platform CLIを使ってエージェントを作成します。[1. コンソールでエージェントを作成](/intermediate-lite/01_console/)で画面から作った構成（環境 → エージェント → セッション）と同じものを、すべて`ant`コマンドで作成します。
+
+<Aside>
+このページで使うコマンドは、`ant beta:agents create`のようにすべて`beta:`から始まります。Managed AgentsのAPIは現在**ベータ版**として提供されており、`ant`ではベータ版のAPIが`beta:`プレフィックス付きのコマンドとして区別されています。ベータ版APIの呼び出しには本来`anthropic-beta: managed-agents-2026-04-01`というHTTPヘッダーの指定が必要ですが、`beta:`付きのコマンドを使うことがその指定にあたり、対応するヘッダーはCLIが送信してくれます。
+</Aside>
+
+## 1. antの環境をセットアップ
+
+<Steps>
+
+1. antをインストールします。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    1. `ant`の[リリースページ](https://github.com/anthropics/anthropic-cli/releases/latest)より、`ant_{バージョン番号}_windows_amd64.zip`をダウンロードします。
+        
+    1. 任意の場所に展開します。
+    1. 展開したフォルダーで`powershell.exe`を起動します。
+
+        :::note
+        ファイルパスが表示されているエリアに入力するのが手っ取り早いと思います。
+
+        ![](../intermediate/images/2026-07-04-23-51-59.png)
+        :::
+    1. コマンド出力の日本語が文字化けしないよう、文字コードをUTF-8に設定します。
+
+        ```shell
+        $OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+        ```
+
+        :::note
+        この設定はウィンドウごとに必要です。PowerShellを開き直したときは、再度実行してください。
+        :::
+    </TabItem>
+
+    <TabItem label="macOS">
+
+    1. ターミナルを開き、以下のコマンドを実行します。
+        ```shell
+        brew install anthropics/tap/ant
+        ```
+    </TabItem>
+
+    </Tabs>
+
+1. `ant auth login`を実行します。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    1. 以下のコマンドを実行します。
+        ```shell
+        ./ant auth login
+        ```
+    </TabItem>
+
+    <TabItem label="macOS">
+
+    1. 以下のコマンドを実行します。
+        ```shell
+        ant auth login
+        ```
+    </TabItem>
+
+    </Tabs>
+
+1. ブラウザでログインします。
+
+    ![](../intermediate/images/2026-07-04-23-56-37.png)
+
+    :::note
+    ブラウザで自動的にログイン処理が行われない場合は、ターミナルに出力されたURLにアクセスして手順に沿ってログインしてください。
+
+    `ant auth login --no-browser`（Windowsの場合は`./ant auth login --no-browser`）を実行すると、ブラウザの自動起動は行わず、ターミナルにURLが出力されます。認可するとブラウザにコードが表示されるので、それをターミナルに貼り付けます。
+    :::
+
+</Steps>
+
+<Aside type="caution" title="ワークショップが終わったらログアウトを">
+`ant auth login`の認証情報はマシンに残り、**Claude Codeで使われることがあります**。詳しくは[こちらのブログ](https://dev.classmethod.jp/articles/claude-max-credit-balance-too-low/)を参照してください。
+
+ワークショップが終わったら、次のコマンドでログアウトしておきましょう。
+
+<Tabs syncKey="os">
+
+<TabItem label="Windows">
+```shell
+./ant auth logout
+```
+</TabItem>
+
+<TabItem label="macOS">
+```shell
+ant auth logout
+```
+</TabItem>
+
+</Tabs>
+
+なお、このあとの手順([3. SDKでエージェントを作成](/intermediate-lite/03_sdk/)や上級のページ)もこの認証情報を使います。**ログアウトはすべての手順が終わってから**にしてください。あとから続きをやるときは、もう一度`ant auth login`を実行すれば再開できます。
+</Aside>
+
+
+## 2. 環境を作成
+
+コンソール版と名前が重複しないよう、CLI版の名前には「-cli」を付けています。
+
+<Aside>
+コマンドは、Windowsは`ant`を展開したフォルダーのPowerShellで、macOSはターミナルで実行します。`$ENVIRONMENT_ID`のような変数はウィンドウを閉じると消えるので、以降の手順は同じウィンドウで続けて実行してください。
+</Aside>
+
+<Steps>
+
+1. MCPサーバーへのネットワークアクセスを許可した環境を作成し、IDを変数に保存します(コマンドは1行です)。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $ENVIRONMENT_ID = ./ant beta:environments create --name "Quiz-environment-cli" --config '{type: cloud, networking: {type: limited, allow_mcp_servers: true}}' --transform id --raw-output
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ENVIRONMENT_ID=$(ant beta:environments create --name "Quiz-environment-cli" --config '{type: cloud, networking: {type: limited, allow_mcp_servers: true}}' --transform id --raw-output)
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside>
+    `allow_mcp_servers: true`が、コンソールの環境作成画面にある「MCP サーバーを許可」チェックに相当します。
+    </Aside>
+
+    変数の中身を表示して、`env_`で始まるIDが保存されていることを確認します。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $ENVIRONMENT_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    echo "$ENVIRONMENT_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+</Steps>
+
+## 3. エージェントを作成
+
+<Steps>
+
+1. コマンドを実行しているフォルダーに`agent.yaml`という名前のファイルを作成し、以下の内容を保存します。
+
+    <Aside type="caution">
+    文字コードは「UTF-8」です(メモ帳の既定でOKですが、「UTF-8 (BOM付き)」は選ばないでください)。エージェント名以外は、コンソールで作成したものと同じ設定です。
+    </Aside>
+
+    ```yaml title="agent.yaml"
+    name: AZ-900 Quiz Agent CLI
+    model:
+      id: claude-haiku-4-5
+      speed: standard
+    description: Microsoft Learn MCPサーバーの最新情報を使ってAZ-900（Azure Fundamentals）の練習問題を出題する学習アシスタント。
+    system: |-
+      あなたはMicrosoft Learn MCPサーバーを使ってAZ-900（Azure Fundamentals）の練習問題を作成する学習アシスタントです。Microsoft Learnの最新の公式ドキュメントを参照し、選択式の問題を1問ずつ出題してください。
+
+      ルール:
+      - 問題文と選択肢を提示したら、ユーザーが回答するまで正解を明かさない。
+      - ユーザーの回答後、正誤を伝え、各選択肢について正誤のポイントを1行ずつで説明する。
+      - 学習の参考になるMicrosoft Learnドキュメントの実在するURLを3つ提示する。
+      - 会話内でユーザーの過去の回答（正解・不正解、出題分野）を記憶し、間違えた分野・苦手なトピックを優先的に次の問題として出題する。
+      - 一度に1問だけ出題し、テンポよく進める。
+    mcp_servers:
+      - name: microsoft-learn
+        type: url
+        url: https://learn.microsoft.com/api/mcp
+    tools:
+      - type: mcp_toolset
+        mcp_server_name: microsoft-learn
+        default_config:
+          enabled: true
+          permission_policy:
+            type: always_allow
+    skills: []
+    metadata: {}
+    ```
+
+1. `agent.yaml`を読み込ませてエージェントを作成し、IDを変数に保存します。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $AGENT_ID = Get-Content agent.yaml -Raw -Encoding UTF8 | ./ant beta:agents create --transform id --raw-output
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    AGENT_ID=$(ant beta:agents create --transform id --raw-output < agent.yaml)
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside type="caution">
+    Windowsで日本語が「?」に化けて登録されてしまった場合は、[1. antの環境をセットアップ](#1-antの環境をセットアップ)の文字コード設定を実行し忘れています。設定を実行してから、`Get-Content agent.yaml -Raw -Encoding UTF8 | ./ant beta:agents update --agent-id $AGENT_ID --version 1`で上書きできます。
+    </Aside>
+
+    変数の中身を表示して、`agent_`で始まるIDが保存されていることを確認します。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $AGENT_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    echo "$AGENT_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+</Steps>
+
+## 4. セッションを作成
+
+<Steps>
+
+1. ここまでで保存した2つのIDが揃っていることを確認します。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $AGENT_ID; $ENVIRONMENT_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    echo "$AGENT_ID"; echo "$ENVIRONMENT_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside type="caution">
+    `agent_...`、`env_...`の2行が表示されない場合は、空になっている変数を作った手順に戻ってやり直してください。変数が空のまま次のコマンドを実行すると、引数がずれて「Unexpected extra arguments」のようなエラーになります。
+    </Aside>
+
+1. エージェントと環境のIDを指定してセッションを作成し、IDを変数に保存します(コマンドは1行です)。認証情報ボールトは不要なので、`--vault-id`は指定しません。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $SESSION_ID = ./ant beta:sessions create --agent $AGENT_ID --environment-id $ENVIRONMENT_ID --transform id --raw-output
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    SESSION_ID=$(ant beta:sessions create --agent "$AGENT_ID" --environment-id "$ENVIRONMENT_ID" --transform id --raw-output)
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    変数の中身を表示して、`sesn_`で始まるIDが保存されていることを確認します。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    $SESSION_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    echo "$SESSION_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside>
+    ここまでに作成した環境・エージェント・セッションは、コンソールのそれぞれのメニューにも表示されます。
+    </Aside>
+
+</Steps>
+
+## 5. エージェントを呼び出す
+
+<Steps>
+
+1. ターミナルを2つ使い、片方でイベントをリアルタイムに受信しながら、もう片方からメッセージを送信します。まず、これまで使ってきたウィンドウ(**ターミナル1**)でイベントのストリーム受信を開始します。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant beta:sessions:events stream --session-id $SESSION_ID --format jsonl
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ant beta:sessions:events stream --session-id "$SESSION_ID" --format jsonl
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    コマンドは実行したまま、イベントが届くのを待ち受けます。`--format jsonl`を付けているので、イベントは1行ずつJSON形式で表示されます。
+
+1. 新しいウィンドウ(**ターミナル2**)を開き、送信の準備をします。変数はウィンドウごとに独立しているため、ターミナル2にも`$SESSION_ID`を設定します。`ここにセッションID`の部分は、[4. セッションを作成](#4-セッションを作成)で表示した`sesn_`から始まるIDに置き換えてください(ターミナル1の画面をさかのぼると確認できます)。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    `ant`を展開したフォルダーで新しくPowerShellを起動し、以下を実行します。
+
+    ```shell
+    $OutputEncoding = [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    $SESSION_ID = "ここにセッションID"
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    新しくターミナルを開き、以下を実行します。
+
+    ```shell
+    SESSION_ID="ここにセッションID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. ターミナル2からメッセージを送信します(コマンドは1行です)。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant beta:sessions:events send --session-id $SESSION_ID --event '{type: user.message, content: [{type: text, text: "AZ-900の練習問題を1問出題してください"}]}'
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ant beta:sessions:events send --session-id "$SESSION_ID" --event '{type: user.message, content: [{type: text, text: "AZ-900の練習問題を1問出題してください"}]}'
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    送信すると、ターミナル1に`user.message`をはじめとするイベントが流れ始めます。MCPツールの呼び出し（`agent.mcp_tool_use`）に続いて、`agent.message`イベントの`text`として問題が届きます。`session.status_idle`が表示されたら完了です。
+
+1. 同じセッションに回答を送ると、正誤判定が返ってきます。セッションはステートフルなので、直前に出題された問題を覚えています。`C`の部分は自分の回答に置き換えてください。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant beta:sessions:events send --session-id $SESSION_ID --event '{type: user.message, content: [{type: text, text: "C"}]}'
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ant beta:sessions:events send --session-id "$SESSION_ID" --event '{type: user.message, content: [{type: text, text: "C"}]}'
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    回答を確認できたら、ターミナル1で`Ctrl+C`を押してストリームを終了してください。
+
+    表示を見逃した場合は、イベント履歴から確認できます。イベントが1行ずつ表示され、`agent.message`の行の`text`が回答です。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id $SESSION_ID
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ant --format jsonl --transform '{type,text:content.0.text}' beta:sessions:events list --session-id "$SESSION_ID"
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. コンソールの「セッション」メニューから同じセッションを開くと、画面上でもやり取りを確認できます。
+
+</Steps>
+
+## まとめ
+
+- コンソールで作ったものと同じ構成(環境 → エージェント → セッション)を、`ant`コマンドだけで再現しました。
+- ベータ版APIは`beta:`プレフィックスのコマンドで呼び出します。`--transform id --raw-output`でレスポンスからIDだけを取り出し、変数で次のコマンドに受け渡しました。
+- 設定は1行のフラグ(`--config`や`--event`)でも、YAMLファイル(`agent.yaml`)でも渡せます。
+- セッションとのやり取りは、`events send`で送信し、`events stream`(または履歴の取得)で確認します。同じセッションに送り続けると、出題 → 回答 → 正誤判定の会話がつながります。
+
+<ShareOnX />

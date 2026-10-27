@@ -1,0 +1,392 @@
+---
+title: 3. SDKでエージェントを作成
+description: 認証不要のMicrosoft Learn MCPサーバーを使うAZ-900練習問題エージェントを、PythonとClaude SDKで作成し、対話するチュートリアル。
+sidebar:
+  order: 3
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../components/ShareOnX.astro';
+
+PythonとClaude SDK(`anthropic`パッケージ)を使ってエージェントを作成します。Pythonの実行環境は`uv`で統一します。
+
+<Aside>
+認証は、[2. CLIでエージェントを作成](/intermediate-lite/02_ant/)で`ant auth login`したログイン情報をSDKが自動で使うため、このページでの設定は不要です。APIキーで認証したい場合は[4. 補足：APIキーの発行と使い方](/intermediate/04_apikey/)を参照してください。
+</Aside>
+
+<Aside>
+このページのコードは`client.beta.environments.create(...)`のように、すべて`beta`を挟んで呼び出します。CLIのコマンドが`beta:`から始まっていたのと同じ理由で、ベータ版として提供されているManaged AgentsのAPIは、SDKでは`client.beta`名前空間に区別されています。`beta`経由で呼ぶことがベータ版利用の指定にあたり、必要な`anthropic-beta: managed-agents-2026-04-01`ヘッダーはSDKが送信してくれます。
+</Aside>
+
+## 1. uvをインストール
+
+<Steps>
+
+1. [uv](https://docs.astral.sh/uv/)をインストールします。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    PowerShellで以下のコマンドを実行します。
+
+    ```shell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ターミナルで以下のコマンドを実行します。
+
+    ```shell
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. ターミナル(またはPowerShell)を**開き直してから**、インストールを確認します。
+
+    ```shell
+    uv --version
+    ```
+
+    `uv 0.11.6`のようにバージョンが表示されればOKです。
+
+</Steps>
+
+## 2. プロジェクトを作成
+
+<Steps>
+
+1. プロジェクトを作成し、そのフォルダーに移動します。
+
+    ```shell
+    uv init quiz-agent
+    cd quiz-agent
+    ```
+
+1. Claude SDKをインストールします。
+
+    ```shell
+    uv add anthropic
+    ```
+
+</Steps>
+
+## 3. リソースを作成
+
+環境・エージェントは「一度作れば使い回す」リソースなので、作成用のスクリプトにまとめます。内容は[1. コンソールでエージェントを作成](/intermediate-lite/01_console/)で画面から作ったものと同じで、名前には「-sdk」を付けています。認証不要のMCPサーバーなので、認証情報ボールトの作成はありません。
+
+<Steps>
+
+1. プロジェクトのフォルダーに`setup.py`を作成し、以下の内容を保存します。
+
+    ```python title="setup.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. 環境を作成（MCPサーバーへのネットワークアクセスを許可）
+    ###############################
+    environment = client.beta.environments.create(
+        name="Quiz-environment-sdk",
+        config={
+            "type": "cloud",
+            "networking": {"type": "limited", "allow_mcp_servers": True},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 2. エージェントを作成
+    ###############################
+    SYSTEM_PROMPT = """あなたはMicrosoft Learn MCPサーバーを使ってAZ-900（Azure Fundamentals）の練習問題を作成する学習アシスタントです。Microsoft Learnの最新の公式ドキュメントを参照し、選択式の問題を1問ずつ出題してください。
+
+    ルール:
+    - 問題文と選択肢を提示したら、ユーザーが回答するまで正解を明かさない。
+    - ユーザーの回答後、正誤を伝え、各選択肢について正誤のポイントを1行ずつで説明する。
+    - 学習の参考になるMicrosoft Learnドキュメントの実在するURLを3つ提示する。
+    - 会話内でユーザーの過去の回答（正解・不正解、出題分野）を記憶し、間違えた分野・苦手なトピックを優先的に次の問題として出題する。
+    - 一度に1問だけ出題し、テンポよく進める。"""
+
+    agent = client.beta.agents.create(
+        name="AZ-900 Quiz Agent SDK",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="Microsoft Learn MCPサーバーの最新情報を使ってAZ-900（Azure Fundamentals）の練習問題を出題する学習アシスタント。",
+        system=SYSTEM_PROMPT,
+        mcp_servers=[
+            {
+                "name": "microsoft-learn",
+                "type": "url",
+                "url": "https://learn.microsoft.com/api/mcp",
+            }
+        ],
+        tools=[
+            {
+                "type": "mcp_toolset",
+                "mcp_server_name": "microsoft-learn",
+                "default_config": {
+                    "enabled": True,
+                    "permission_policy": {"type": "always_allow"},
+                },
+            }
+        ],
+    )
+    print(f"agent:       {agent.id}")
+
+    ###############################
+    # 作成したIDをファイルに保存（run.py / chat.pyで使う）
+    ###############################
+    with open("ids.json", "w") as f:
+        json.dump(
+            {
+                "environment_id": environment.id,
+                "agent_id": agent.id,
+            },
+            f,
+            indent=2,
+        )
+    print("IDをids.jsonに保存しました")
+    ```
+
+1. スクリプトを実行します。
+
+    ```shell
+    uv run setup.py
+    ```
+
+    次のように、作成されたリソースのIDが表示されます。
+
+    ```text
+    environment: env_018fgtuvYobdrA98ty299UpD
+    agent:       agent_018ZmPdCappkAQ5g3nc444To
+    IDをids.jsonに保存しました
+    ```
+
+    <Aside type="caution">
+    エージェントは「作成は一度だけ、以降はIDで参照」が基本パターンです。このスクリプトではIDを`ids.json`に保存し、次のスクリプトで読み込んで使います。`setup.py`を実行するのは一度だけにしてください(再実行すると環境名の重複でエラーになります)。
+    </Aside>
+
+</Steps>
+
+## 4. エージェントを呼び出す
+
+セッションの作成とエージェントとの対話は、実行のたびに使うスクリプトにまとめます。
+
+<Steps>
+
+1. プロジェクトのフォルダーに`run.py`を作成し、以下の内容を保存します。
+
+    ```python title="run.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # setup.pyで保存したIDを読み込む
+    ###############################
+    with open("ids.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # 1. セッションを作成（エージェントと環境を組み合わせる。ボールトは不要）
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+    )
+    print(f"session: {session.id}")
+
+    ###############################
+    # 2. 先にイベントのストリームを開く（イベントを取りこぼさないため）
+    ###############################
+    stream = client.beta.sessions.events.stream(session_id=session.id)
+
+    ###############################
+    # 3. メッセージを送信
+    ###############################
+    client.beta.sessions.events.send(
+        session.id,
+        events=[
+            {
+                "type": "user.message",
+                "content": [{"type": "text", "text": "AZ-900の練習問題を1問出題してください"}],
+            }
+        ],
+    )
+    print("メッセージを送信しました。応答を待っています...\n")
+
+    ###############################
+    # 4. イベントを受信しながら表示する
+    ###############################
+    for event in stream:
+        if event.type == "agent.mcp_tool_use":
+            print(f"[ツール呼び出し: {event.name}]")
+        elif event.type == "agent.message":
+            for block in event.content:
+                if block.type == "text":
+                    print(block.text)
+        elif event.type == "session.status_idle":
+            if event.stop_reason.type != "requires_action":
+                break
+        elif event.type == "session.status_terminated":
+            break
+
+    stream.close()
+    print("\n完了しました")
+    ```
+
+    <Aside>
+    ストリームには接続後に発生したイベントだけが流れるため、**先にストリームを開いてからメッセージを送信**するのがポイントです。受信はエージェントが入力待ち(`session.status_idle`)になったら終了します。
+    </Aside>
+
+1. スクリプトを実行します。
+
+    ```shell
+    uv run run.py
+    ```
+
+    ツールの呼び出しに続いて、問題がリアルタイムに表示されます。
+
+    ```text
+    session: sesn_01CCczZDALAHspEXUqx9rhFQ
+    メッセージを送信しました。応答を待っています...
+
+    [ツール呼び出し: microsoft_docs_search]
+    AZ-900の練習問題です（分野：クラウドの概念 - 責任共有モデル）
+
+    問題
+    ある会社が、オンプレミスの業務アプリケーションをAzureに移行しようとしています。...
+
+    A. ...
+    B. ...
+    C. ...
+    D. ...
+
+    A〜Dから1つ選んで回答してください。
+
+    完了しました
+    ```
+
+1. `run.py`をもう一度実行すると、同じエージェントで新しいセッションが始まります。作成したリソースやセッションのやり取りは、コンソールの各メニューからも確認できます。
+
+</Steps>
+
+## 5. 対話を続ける
+
+`run.py`は1往復で終了するので、問題が出題されたところで終わってしまいます。セッションはステートフルなので、**同じセッションにメッセージを送り続けると会話がつながります**。出題 → 回答 → 正誤判定 → 次の問題、と続けられる対話型のバージョンを作ってみましょう。
+
+<Steps>
+
+1. プロジェクトのフォルダーに`chat.py`を作成し、以下の内容を保存します。
+
+    ```python title="chat.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # setup.pyで保存したIDを読み込む
+    ###############################
+    with open("ids.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # セッションは最初に1つだけ作る（同じセッションに送り続けると会話がつながる）
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+    )
+    print(f"session: {session.id}")
+    print("エージェントと対話します。exit と入力すると終了します。\n")
+
+    while True:
+        user_input = input("あなた> ").strip()
+        if user_input == "exit":
+            break
+        if not user_input:
+            continue
+
+        ###############################
+        # ストリームを開いてからメッセージを送信
+        ###############################
+        stream = client.beta.sessions.events.stream(session_id=session.id)
+        client.beta.sessions.events.send(
+            session.id,
+            events=[
+                {
+                    "type": "user.message",
+                    "content": [{"type": "text", "text": user_input}],
+                }
+            ],
+        )
+
+        ###############################
+        # エージェントが入力待ちになるまでイベントを表示
+        ###############################
+        for event in stream:
+            if event.type == "agent.mcp_tool_use":
+                print(f"[ツール呼び出し: {event.name}]")
+            elif event.type == "agent.message":
+                for block in event.content:
+                    if block.type == "text":
+                        print(block.text)
+            elif event.type == "session.status_idle":
+                if event.stop_reason.type != "requires_action":
+                    break
+            elif event.type == "session.status_terminated":
+                break
+        stream.close()
+        print()
+    ```
+
+    <Aside>
+    セッションの作成はループの**外**で一度だけ行い、各ターンは「ストリームを開く → 送信 → 入力待ちになるまで受信」の繰り返しです。会話の履歴はセッション側に保存されているので、クライアントで履歴を管理する必要はありません。
+    </Aside>
+
+1. スクリプトを実行し、問題に答えてみます。正誤判定のあと「次」と送ると、次の問題が出題されます。
+
+    ```shell
+    uv run chat.py
+    ```
+
+    ```text
+    session: sesn_01UDB8UgiKxoFr1myDyGfjf2
+    エージェントと対話します。exit と入力すると終了します。
+
+    あなた> AZ-900の練習問題を1問出題してください
+    [ツール呼び出し: microsoft_docs_search]
+    AZ-900の練習問題です（分野：クラウドの概念 - 責任共有モデル）
+    ...
+    A〜Dから1つ選んで回答してください。
+
+    あなた> C
+    正解です！ 答えは C です。
+    ...
+    これまでの成績：1問中1問正解
+
+    あなた> 次
+    [ツール呼び出し: microsoft_docs_search]
+    問題2 ...
+
+    あなた> exit
+    ```
+
+</Steps>
+
+## まとめ
+
+- コンソール・CLIと同じ構成を、Python SDKで構築しました。認証不要のMCPサーバーなら、ボールトの作成もセッションへの紐付けも不要です。
+- リソースの作成(`setup.py`)と実行(`run.py`)をスクリプトとして分け、IDを`ids.json`で受け渡すのが基本パターンです。
+- イベントは**ストリームを先に開いてから送信**し、`session.status_idle`で受信を終えます。
+- セッションはステートフルなので、同じセッションに送り続けるだけで「出題 → 回答 → 正誤判定」の会話がつながります(`chat.py`)。履歴の管理はクライアント側では不要です。
+
+<ShareOnX />
