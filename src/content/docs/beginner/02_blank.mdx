@@ -12,7 +12,7 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 完成すると、チャットで練習問題が出題され、回答を送ると正誤判定と各選択肢の解説が返ってくるようになります。
 
-![](images/2026-07-04-09-05-50.png)
+![](images/2026-10-27-blank-graded.jpg)
 
 作成する要素は次の3つです。
 
@@ -27,13 +27,13 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 <Steps>
 
 
-1. 「マネージドエージェント」メニューの「クイックスタート」を選択します。
+1. サイドバーの「エージェント」をクリックし、サブメニューの「作成」を選択します。
 
-    ![](images/2026-07-04-07-22-38.png)
+    ![](images/2026-10-27-create.jpg)
 
     ワークスペースが「workshop」になっていることを確認してください。
 
-1. チャット欄に以下の内容を入力し、送信します。
+1. 「何を作りたいですか？」の入力欄に以下の内容を入力し、送信します。
 
     ```text
     Microsoft LearnのMCPサーバーから最新の情報を取得し、「Azure Fundamentals」資格（AZ-900）の練習問題を作成してください。
@@ -47,56 +47,60 @@ import ShareOnX from '../../../components/ShareOnX.astro';
     ユーザーの回答を記憶し、不得意分野を重点的に出題するようにしてください。
     ```
 
-1. エージェントの設定ファイルが作成されます。「このエージェントを作成」をクリックします。
+    ![](images/2026-10-27-blank-prompt.jpg)
 
-    ![](images/2026-07-04-08-38-41.png)
+    <Aside>
+    入力欄で改行するには Shift + Enter を押します。
+    </Aside>
+
+1. エージェントの設定（YAML）が生成され、右の「エージェント設定」パネルに表示されます。「このエージェントを作成しますか？」と聞かれるので、「エージェントを作成」をクリックします。
+
+    ![](images/2026-10-27-blank-yaml.jpg)
 
     <Tabs>
-    <TabItem label="設定ファイル">
+    <TabItem label="生成された設定の例">
     ```yaml
-    name: Azure Fundamentals Quiz Bot
-    description: Microsoft Learn MCPサーバーの最新情報を使ってAZ-900（Azure Fundamentals）の練習問題を出題し、回答履歴から苦手分野を優先出題する学習アシスタント。
-    model: claude-sonnet-5
+    name: AZ-900 練習問題メーカー
+    model:
+      id: claude-opus-5-5
+      effort: low
+    description: Microsoft Learn MCPを使ってAzure Fundamentals (AZ-900) の練習問題を出題するエージェント
     system: |-
-      あなたはMicrosoft Learn MCPサーバーを使ってAZ-900（Azure Fundamentals）の練習問題を作成する学習アシスタントです。Microsoft Learnの最新の公式ドキュメントを参照し、選択式の問題を1問ずつ出題してください。
+      あなたはAZ-900(Azure Fundamentals)資格の学習をサポートする出題エージェントです。Microsoft Learn MCPサーバーから最新情報を取得し、AZ-900の練習問題を作成します。
 
-      ルール:
-      - 問題文と選択肢を提示したら、ユーザーが回答するまで正解を明かさない。
-      - ユーザーの回答後、正誤を伝え、各選択肢について正誤のポイントを1行ずつで説明する。
-      - 学習の参考になるMicrosoft Learnドキュメントの実在するURLを3つ提示する。
-      - 会話内でユーザーの過去の回答（正解・不正解、出題分野）を記憶し、間違えた分野・苦手なトピックを優先的に次の問題として出題する。
-      - 一度に1問だけ出題し、テンポよく進める。
+      進行ルール:
+      1. 問題文と選択肢を提示する。この時点では正解を明示しない。
+      2. ユーザーが回答するまで待つ。
+      3. 回答後、正誤を伝え、各選択肢について正しいか誤りかの理由を1行ずつで説明する。
+      4. 学習の参考になるMicrosoft Learnドキュメントの実在するURLを3つ提示する(MCPで取得・確認したもの)。
+
+      ユーザーの過去の回答履歴(正解・不正解の分野)を会話内で記憶し、不得意なトピックを重点的に出題する。トピックは必要に応じてMCPで調べ、存在しない情報を捏造しない。常に親切かつ簡潔に、学習者のペースに合わせて進行する。
     mcp_servers:
       - name: microsoft-learn
         url: https://learn.microsoft.com/api/mcp
         type: url
     tools:
       - type: agent_toolset_20260401
+        default_config:
+          permission_policy:
+            type: auto
       - type: mcp_toolset
         mcp_server_name: microsoft-learn
         default_config:
           permission_policy:
-            type: always_allow
-    skills: []
+            type: auto
     ```
     </TabItem>
     </Tabs>
 
-
     <Aside>
-    MCPサーバーの設定が含まれていることを確認してください。
+    `mcp_servers`にMicrosoft LearnのMCPサーバーが、`tools`に`mcp_toolset`が含まれていることを確認してください。生成内容は毎回少しずつ変わります。右のパネルで直接編集するか、「改善を続ける」でチャットから修正を依頼することもできます。
     </Aside>
 
 
-1. エージェントが作成されました。続いて「次へ：環境を設定する」をクリックします。
+1. エージェントが作成されました。「Microsoft Learnはauthless（認証不要）」と判断され、認証情報ボールトは不要とされています。続いて「環境を設定」をクリックします。
 
-    ![](images/2026-07-04-08-40-12.png)
-
-    <Aside>
-    作成済みの環境を使用するか新規作成するか聞かれる場合は、新規作成を選択してください。
-
-    ![](images/2026-07-04-08-55-16.png)
-    </Aside>
+    ![](images/2026-10-27-blank-agent-created.jpg)
 
 </Steps>
 
@@ -104,13 +108,21 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 <Steps>
 
-1. ネットワークアクセスの設定についての確認です。MCPサーバーの接続に限定するため「Limited to learn.microsoft.com」を選択します。
+1. 作成済みの環境を使うか、新しく作るか聞かれます。「新しい環境を作成」を選択します。
 
-    ![](images/2026-07-04-08-57-45.png)
+    ![](images/2026-10-27-blank-env-choose.jpg)
 
-1. 環境が作成されました。続いて「次へ：セッションを開始」をクリックします。
+1. ネットワークアクセスの範囲についての確認です。MCPサーバーの接続先に限定するため、「制限あり（Microsoft Learnのホストのみ許可）」を選択します。
 
-    ![](images/2026-07-04-08-58-39.png)
+    ![](images/2026-10-27-blank-env-network.jpg)
+
+1. 環境の作成内容が提案されます。ネットワークが`limited`で、MCPサーバーの許可と`learn.microsoft.com`のホストが含まれていることを確認し、「環境を作成」をクリックします。
+
+    ![](images/2026-10-27-blank-env-confirm.jpg)
+
+1. 環境が作成されました。続いて「セッションを開始」をクリックします。
+
+    ![](images/2026-10-27-blank-env-created.jpg)
 
 </Steps>
 
@@ -118,29 +130,23 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 <Steps>
 
-1. セッションを開始し、テストを行います。「テスト実行」をクリックします。
+1. 右側に「セッション」パネルが開きます。チャット欄にテスト用のメッセージが入力済みなので、そのまま送信します。
 
-    ![](images/2026-07-04-09-00-03.png)
+    ![](images/2026-10-27-blank-session-started.jpg)
 
-1. 右側のプレビューエリアでセッションが開始されます。チャット欄にテスト文言が入力されているので送信します。
+1. エージェントがMicrosoft LearnのMCPツール（`microsoft_docs_search`）を呼び出し、問題を出題します。
 
-    ![](images/2026-07-04-09-01-19.png)
+    ![](images/2026-10-27-blank-question.jpg)
 
-1. エージェントの最後の応答を確認します。
+1. セッションパネルのチャット欄で回答（例: `C`）を送信してみます。
 
-    ![](images/2026-07-04-09-02-34.png)
+    ![](images/2026-10-27-blank-answer-typed.jpg)
 
-1. 期待どおり問題が出題されています。
+1. 回答に対する正誤判定と、各選択肢の解説、参考ドキュメントのURLが返ってきました。
 
-    ![](images/2026-07-04-09-03-41.png)
+    ![](images/2026-10-27-blank-graded.jpg)
 
-1. チャット欄で回答を送信してみます。（送信後、「×」で前の状態に戻ります）
-
-    ![](images/2026-07-04-09-06-51.png)
-
-1. 回答に対する正誤が得られました。
-
-    ![](images/2026-07-04-09-05-50.png)
+    ![](images/2026-10-27-blank-graded-end.jpg)
 
 </Steps>
 
@@ -150,10 +156,7 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 <Steps>
 
-1. 確認が終わったら、「セッションを停止」をクリックします。
-
-    ![](images/2026-07-04-09-12-01.png)
-
+1. 確認が終わったら、左のチャットにある「セッションを停止」をクリックします。テスト結果のまとめが表示され、「このエージェントで何をしますか？」と聞かれるので「スキップ」で構いません。
 
 </Steps>
 

@@ -1,6 +1,6 @@
 ---
 title: 1. テンプレートからエージェントを作成
-description: クイックスタートのテンプレート「Deep researcher」から、Web調査を行うリサーチエージェントを作成して動かすチュートリアル。
+description: テンプレート「詳細リサーチャー」から、Web調査を行うリサーチエージェントを作成して動かすチュートリアル。
 sidebar:
   order: 1
 ---
@@ -8,11 +8,11 @@ sidebar:
 import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 import ShareOnX from '../../../components/ShareOnX.astro';
 
-このページでは、クイックスタートのテンプレート「Deep researcher」を使って、**Webリサーチエージェント**を作成します。テンプレートを選ぶだけで、エージェントの作成からセッションでの実行までを一通り体験できます。
+このページでは、テンプレート「詳細リサーチャー」（Deep researcher）を使って、**Webリサーチエージェント**を作成します。テンプレートを選ぶだけで、エージェントの作成からセッションでの実行までを一通り体験できます。
 
 完成すると、チャットで質問を送るだけで、エージェントが質問をサブクエスチョンに分解してWeb検索を行い、出典付きのレポートで回答してくれるようになります。
 
-![](images/2026-07-04-07-59-08.png)
+![](images/2026-10-27-session-grading.jpg)
 
 作成する要素は次の3つです。
 
@@ -26,50 +26,31 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 <Steps>
 
-1. 「マネージドエージェント」メニューの「クイックスタート」を選択します。
+1. サイドバーの「エージェント」をクリックし、サブメニューの「作成」を選択します。
 
-    ![](images/2026-07-04-07-22-38.png)
+    ![](images/2026-10-27-create.jpg)
 
-    ワークスペースが「workshop」になっていることを確認してください。
+    サブメニュー上部のワークスペースが「workshop」になっていることを確認してください。
 
-1. テンプレートにある「Deep researcher」を選択します。
+1. テンプレート一覧から「詳細リサーチャー」をクリックします。テンプレートの内容がダイアログで表示されます。
 
-    ![](images/2026-07-04-07-24-09.png)
+    ![](images/2026-10-27-template-dialog.jpg)
 
+    このテンプレートには**結果（Outcome）**が定義されています。「結果の判定方法」を開くと、エージェントの成果物を採点するルーブリック（評価基準）を確認できます。セッションでは、この基準で最終レポートが自動採点され、基準を満たすまでエージェントが自分でやり直します。
 
-1. 「テンプレートを使用する」をクリックします。
-
-    ![](images/2026-07-04-07-25-04.png)
+    ![](images/2026-10-27-template-outcome.jpg)
 
     **テンプレートの内容**
 
     <Tabs>
-    <TabItem label="日本語">
-
-    ```yaml
-    name: ディープリサーチャー
-    description: 複数ステップのウェブ調査を行い、情報源の統合と引用を行います。
-    model: claude-sonnet-5
-    system: |-
-      あなたはリサーチエージェントです。質問やトピックが与えられたら:
-
-      1. トピック全体をカバーできるような、具体的な3〜5個のサブクエスチョンに分解してください。
-      2. 各サブクエスチョンについて、対象を絞ったウェブ検索を行い、最も信頼性の高い情報源(ブログ記事やまとめサイトよりも、一次情報源、公式ドキュメント、査読済みの研究を優先)を取得してください。
-      3. 情報源は流し読みせず、しっかりと読み込んでください。具体的な主張、データ、直接引用を出典とともに抽出してください。
-      4. 元の質問に答えるレポートを統合してください。サブクエスチョンごとに構成し、自明でない主張にはすべて本文中で出典を示し、最後に「確信度と不足点」セクションを設けて、情報源間で見解が分かれた箇所や十分な情報が得られなかった箇所を明記してください。
-
-      懐疑的な姿勢を保ってください。情報源同士が矛盾する場合はその旨を明示し、どちらがより信頼できるか、その理由とともに説明してください。自信ありげな文章で不確実性を覆い隠さないでください。
-    tools:
-      - type: agent_toolset_20260401
-    metadata:
-      template: deep-research
-    ```
-    </TabItem>
     <TabItem label="原文（英語）">
+
     ```yaml
     name: Deep researcher
     description: Conducts multi-step web research with source synthesis and citations.
-    model: claude-sonnet-5
+    model:
+      id: claude-opus-5-5
+      effort: low
     system: |-
       You are a research agent. Given a question or topic:
 
@@ -77,10 +58,42 @@ import ShareOnX from '../../../components/ShareOnX.astro';
       2. For each sub-question, run targeted web searches and fetch the most authoritative sources (prefer primary sources, official docs, peer-reviewed work over blog posts and aggregators).
       3. Read the sources in full — don't skim. Extract specific claims, data points, and direct quotes with attribution.
       4. Synthesize a report that answers the original question. Structure it by sub-question, cite every non-obvious claim inline, and close with a "confidence & gaps" section noting where sources disagreed or where you couldn't find good coverage.
+      5. Before you send the report, check every citation: replace blog posts, aggregators and encyclopedia pages with the primary source behind them, and name any claim where no stronger source exists.
 
       Be skeptical. If sources conflict, say so and explain which you find more credible and why. Don't paper over uncertainty with confident-sounding prose.
     tools:
       - type: agent_toolset_20260401
+        default_config:
+          permission_policy:
+            type: auto
+    metadata:
+      template: deep-research
+    ```
+
+    </TabItem>
+    <TabItem label="日本語訳">
+
+    ```yaml
+    name: Deep researcher
+    description: 複数ステップのウェブ調査を行い、情報源の統合と引用を行います。
+    model:
+      id: claude-opus-5-5
+      effort: low
+    system: |-
+      あなたはリサーチエージェントです。質問やトピックが与えられたら:
+
+      1. トピック全体をカバーできるような、具体的な3〜5個のサブクエスチョンに分解してください。
+      2. 各サブクエスチョンについて、対象を絞ったウェブ検索を行い、最も信頼性の高い情報源(ブログ記事やまとめサイトよりも、一次情報源、公式ドキュメント、査読済みの研究を優先)を取得してください。
+      3. 情報源は流し読みせず、しっかりと読み込んでください。具体的な主張、データ、直接引用を出典とともに抽出してください。
+      4. 元の質問に答えるレポートを統合してください。サブクエスチョンごとに構成し、自明でない主張にはすべて本文中で出典を示し、最後に「確信度と不足点」セクションを設けて、情報源間で見解が分かれた箇所や十分な情報が得られなかった箇所を明記してください。
+      5. レポートを送る前にすべての引用を確認してください。ブログ記事・まとめサイト・百科事典のページは、その背後にある一次情報源に置き換え、より強い情報源が見つからない主張はその旨を明記してください。
+
+      懐疑的な姿勢を保ってください。情報源同士が矛盾する場合はその旨を明示し、どちらがより信頼できるか、その理由とともに説明してください。自信ありげな文章で不確実性を覆い隠さないでください。
+    tools:
+      - type: agent_toolset_20260401
+        default_config:
+          permission_policy:
+            type: auto
     metadata:
       template: deep-research
     ```
@@ -88,10 +101,13 @@ import ShareOnX from '../../../components/ShareOnX.astro';
     </TabItem>
     </Tabs>
 
+    <Aside>
+    `model`には`claude-opus-5-5`と`effort: low`（思考の深さ：低）が指定されています。コストを抑えたい場合は、作成後に「設定」で`claude-sonnet-5`などに変更できます。
+    </Aside>
 
-1. エージェントが作成されました。続いて「次へ：環境を設定する」をクリックします。
+1. 「このテンプレートを使用」をクリックします。エージェントが作成され、画面右の「進行状況」に「エージェントを作成 → 環境を設定 → セッションを開始 → 統合」の4ステップが表示されます。続いて「環境を設定」をクリックします。
 
-    ![](images/2026-07-04-07-31-59.png)
+    ![](images/2026-10-27-agent-created.jpg)
 
 </Steps>
 
@@ -99,26 +115,25 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 <Steps>
 
-1. ネットワークアクセスの設定を行います。「Unrestricted」（無制限）を選択します。
+1. ネットワークアクセスについての質問が表示されます。「Unrestricted」（無制限）を選択します。
 
-    ![](images/2026-07-04-07-32-42.png)
-
+    ![](images/2026-10-27-env-network.jpg)
 
     <Aside>
-
-    チャット欄を使って指示が可能ですので、応答を日本語にしたい場合はこのように指示します。
-
-    ![](images/2026-07-04-07-33-52.png)
-
-    次から日本語でのやり取りになると思います。
-
-    ![](images/2026-07-04-07-34-56.png)
-
+    選択肢を選ぶ代わりに、下のチャット欄（「または直接返信…」）に文章で答えることもできます。
     </Aside>
 
-1. 環境が作成されました。続いて「次へ：セッションを開始」をクリックします。
+1. 環境の作成内容（名前とネットワーク設定）が提案されるので、「環境を作成」をクリックします。
 
-    ![](images/2026-07-04-07-44-22.png)
+    ![](images/2026-10-27-env-confirm.jpg)
+
+1. 環境が作成されました。続いて「セッションを開始」をクリックします。
+
+    ![](images/2026-10-27-env-created.jpg)
+
+    <Aside>
+    「最初のメッセージを送信するまで、何も実行されません。このセッションでは最大 $5.00 まで使用できます」と表示されているとおり、テストセッションには予算の上限が設定されています。
+    </Aside>
 
 </Steps>
 
@@ -126,25 +141,29 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 <Steps>
 
-1. セッションを開始し、テストを行います。「テスト実行」をクリックします。
+1. 右側に「セッション」パネルが開きます。チャット欄にテスト用のメッセージが入力済みなので、そのまま送信します（内容を編集してから送っても構いません）。
 
-    ![](images/2026-07-04-07-45-44.png)
+    ![](images/2026-10-27-session-started.jpg)
 
-1. 右側のプレビューエリアでセッションが開始されます。チャット欄にテスト文言が入力されているので送信します。
+1. エージェントが動き始めます。サブクエスチョンへの分解と`web_search`の呼び出しが、パネルにリアルタイムで表示されます。左のチャットには、このメッセージがAPIのどのエンドポイント（`POST /v1/sessions/{id}/events`）で送られたかの解説が表示されます。
 
-    ![](images/2026-07-04-07-47-28.png)
+    ![](images/2026-10-27-session-running.jpg)
 
-1. エージェントが呼び出されます。左のチャット欄にAPI呼び出しのCLIコマンド（PythonやTypeScriptに切り替え可能）が表示されます。右側のプレビューエリアには、APIのレスポンスが表示されます。
+1. 最初に、テンプレートに定義されていた「結果」とルーブリックがパネルに表示されます。
 
-    ![](images/2026-07-04-07-52-52.png)
+    ![](images/2026-10-27-session-rubric.jpg)
 
-1. トランスクリプトタブに切り替えると、主要なメッセージが見やすく表示されます。
+1. レポートが完成すると、ルーブリックに基づいた**採点**が行われます。「要修正」と判定された場合、エージェントは指摘を受けて自動でレポートを改善します（反復回数には上限があります）。
 
-    ![](images/2026-07-04-07-56-09.png)
+    ![](images/2026-10-27-session-grading.jpg)
 
-1. エージェントの最後のメッセージをクリックすると、最終回答が整形されて表示されます。「×」で前の状態に戻ります。
+    <Aside type="tip">
+    パネル右上の「↗」アイコンから、セッションの詳細ページを新しいタブで開けます。詳細ページでは、全イベントのタイムラインや、エージェントが作成したファイル（`/mnt/session/outputs/`配下）を確認できます。
 
-    ![](images/2026-07-04-07-59-08.png)
+    ![](images/2026-10-27-session-page.jpg)
+    </Aside>
+
+1. 十分に確認できたら、左のチャットにある「セッションを停止」をクリックします。
 
 </Steps>
 
@@ -152,54 +171,61 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 
 <Steps>
 
-1. エージェントの動作を調整したい場合は、左のチャット欄で指示を行います。
+1. エージェントの動作を調整したい場合は、セッションの実行中でも、左のチャット欄で指示を送ります。
 
-    ![](images/2026-07-04-08-02-02.png)
+    ![](images/2026-10-27-adjust-typed.jpg)
 
-1. どのようにエージェントを更新するか確認がある場合があります。
+1. 指示はいったん受け付けられ、**テストセッションの終了後に**エージェント設定へ反映されます。引き続きテストを続けられます。
 
-    ![](images/2026-07-04-08-03-23.png)
+    ![](images/2026-10-27-adjust-ack.jpg)
 
-1. システムプロンプトが更新されます。「設定」タブに切り替えると確認できます。
+1. 「セッションを停止」をクリックすると、テスト結果のまとめとともに、システムプロンプトの変更案が差分で表示されます。「バージョンを保存」をクリックすると、新しいバージョン（v2）として保存されます。
 
-    ![](images/2026-07-04-08-05-55.png)
+    ![](images/2026-10-27-adjust-diff.jpg)
+
+    ![](images/2026-10-27-adjust-saved.jpg)
 
     <Aside type="tip">
-    設定タブのYAMLは直接編集も可能です。
+    右の「エージェント設定」パネルのYAMLは直接編集も可能です。保存後は「エージェント」メニューからエージェントを開くと、「設定」タブでバージョンごとの内容を確認・編集できます。
+
+    ![](images/2026-10-27-agent-page.jpg)
     </Aside>
 
-1. 調整した内容でテストを続けるには、一度「セッションを停止」をクリックした後に、再度「テスト実行」をクリックします。
-
-    - セッションを停止
-        ![](images/2026-08-10-02-29-25.png)
-
-    - テスト実行
-        ![](images/2026-08-10-02-30-15.png)
-
-1. 調整が完了したら、「セッションを停止」をクリックします。
-
-    ![](images/2026-07-04-08-02-35.png)
-
+1. 調整した内容でテストを続けるには、「セッションを開始」で新しいテストセッションを起動します。
 
 </Steps>
 
-## 5. 作成したリソースを確認する
+## 5. 統合（アプリケーションから呼び出す）
 
 <Steps>
 
-1. 作成したエージェント、環境、セッションはそれぞれのメニューで確認できます。
+1. セッションを停止すると、「このエージェントで何をしますか？」と聞かれます。「アプリケーションから呼び出す」を選択します。
+
+    ![](images/2026-10-27-session-stopped.jpg)
+
+1. セッションの作成・メッセージ送信・イベントのストリーミングを行うサンプルコードが表示されます（cURL / Python / TypeScriptを切り替え可能）。中級以降で使うAPIの全体像がここで確認できます。「Export as code」でエージェントの定義をファイルとしてダウンロードすることもできます。確認できたら「終了」をクリックします。
+
+    ![](images/2026-10-27-integrate-code.jpg)
+
+</Steps>
+
+## 6. 作成したリソースを確認する
+
+<Steps>
+
+1. 作成したエージェント、環境、セッションは「エージェント」メニューのサブメニューからそれぞれ確認できます。
 
     * エージェント
 
-    ![](images/2026-07-04-08-09-13.png)
+    ![](images/2026-10-27-agents-list.jpg)
 
     * 環境
 
-    ![](images/2026-07-04-08-09-46.png)
+    ![](images/2026-10-27-environments-list.jpg)
 
     * セッション
 
-    ![](images/2026-07-04-08-10-31.png)
+    ![](images/2026-10-27-sessions-list.jpg)
 
 
 </Steps>
@@ -207,8 +233,9 @@ import ShareOnX from '../../../components/ShareOnX.astro';
 ## まとめ
 
 - テンプレートを選ぶだけで、**エージェント → 環境 → セッション**という基本の流れを一通り体験できました。
-- エージェントの実体は、モデル・システムプロンプト・ツールを定義した設定(YAML)です。「設定」タブでいつでも確認・編集できます。
+- エージェントの実体は、モデル・システムプロンプト・ツールを定義した設定(YAML)です。エージェントのページの「設定」タブでいつでも確認・編集できます。
 - 環境では、サンドボックスのネットワークアクセスを設定しました。
-- エージェントの振る舞いを変えたいときは、チャットで指示するだけでシステムプロンプトが更新されます。
+- テンプレートに**結果（Outcome）**が定義されていると、セッションの成果物はルーブリックで自動採点され、基準を満たすまでエージェントが自分で改善します。
+- エージェントの振る舞いを変えたいときは、チャットで指示するだけで、テスト終了後にシステムプロンプトの変更案が提示され、新しいバージョンとして保存できます。
 
 <ShareOnX />

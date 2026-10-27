@@ -83,7 +83,7 @@ Reference: [Tools](https://platform.claude.com/docs/en/managed-agents/tools)
 
 ## Watch Sessions in Real Time in the Console
 
-When you create a session, a trace view becomes available in the Claude Platform console. You can see in real time which tools the agent called and with what arguments. If you know the session ID, you can open it at the following URL, so we recommend **keeping the terminal and the console side by side**.
+When you create a session, a trace view becomes available in the Claude Platform console ("Agents" menu → "Sessions"). You can see in real time which tools the agent called and with what arguments. If you know the session ID, you can open it at the following URL, so we recommend **keeping the terminal and the console side by side**.
 
 ```text
 https://platform.claude.com/workspaces/default/sessions/{session ID}
@@ -99,9 +99,11 @@ Reference: [Session operations](https://platform.claude.com/docs/en/managed-agen
 
     | Model | Input / 1M tokens | Output / 1M tokens |
     | --- | --- | --- |
-    | Claude Opus 4.8 (`claude-opus-4-8`) | $5.00 | $25.00 |
-    | Claude Sonnet 5 (`claude-sonnet-5`) | $3.00 ($2.00 until 2026-08-31) | $15.00 ($10.00 until then) |
+    | Claude Opus 5.5 (`claude-opus-5-5`) | $4.00 | $20.00 |
+    | Claude Sonnet 5 (`claude-sonnet-5`) | $2.00 | $10.00 |
     | Claude Haiku 4.5 (`claude-haiku-4-5`) | $1.00 | $5.00 |
+
+    Agents generated from console templates or via chat use `claude-opus-5-5` by default.
 
 2. Session uptime ($0.08 per hour)
 
