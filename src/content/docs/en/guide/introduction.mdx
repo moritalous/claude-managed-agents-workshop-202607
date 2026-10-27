@@ -36,6 +36,10 @@ You can understand Managed Agents by grasping these four concepts. In today's ha
 | **Session** | An instance of an agent running inside an environment. It executes tasks and produces artifacts |
 | **Event** | A message exchanged between your application and the agent (user messages, tool execution notifications, status updates, etc.) |
 
+![The four concepts of Claude Managed Agents](../../guide/images/2026-10-28-concepts-en.svg)
+
+Your application sends **events** to a session; the session runs the **agent** (what to do) inside the **environment** (where it runs) and returns the results as events.
+
 Reference: [Agents](https://platform.claude.com/docs/en/managed-agents/agent-setup) / [Environments](https://platform.claude.com/docs/en/managed-agents/environments) / [Sessions](https://platform.claude.com/docs/en/managed-agents/sessions) / [Events](https://platform.claude.com/docs/en/managed-agents/events-and-streaming)
 
 ## How It Works

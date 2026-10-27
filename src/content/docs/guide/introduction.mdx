@@ -36,6 +36,10 @@ Managed Agentsはこの4つを押さえれば理解できます。今日のハ�
 | **セッション(Session)** | 環境内で実行中のエージェントのインスタンス。タスクを実行し、成果物を生成する |
 | **イベント(Event)** | アプリケーションとエージェントの間で交換されるメッセージ（ユーザーメッセージ、ツール実行の通知、ステータス更新など） |
 
+![Claude Managed Agentsの4つの概念](images/2026-10-28-concepts.svg)
+
+アプリケーションはセッションに**イベント**を送り、セッションは**エージェント**（何をするか）を**環境**（どこで動くか）の中で実行して、結果をイベントとして返します。
+
 参考: [エージェント](https://platform.claude.com/docs/ja/managed-agents/agent-setup)・[環境](https://platform.claude.com/docs/ja/managed-agents/environments)・[セッション](https://platform.claude.com/docs/ja/managed-agents/sessions)・[イベント](https://platform.claude.com/docs/ja/managed-agents/events-and-streaming)
 
 ## 動作の流れ
