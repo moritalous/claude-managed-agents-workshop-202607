@@ -1,0 +1,205 @@
+---
+title: 4. Operate from Claude Code
+description: A tutorial that uses the claude-api skill bundled with Claude Code and the ant CLI to list, run, and create Claude Managed Agents agents in natural language.
+sidebar:
+  order: 4
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+So far you have assembled agents by hand in the console, the CLI, and the SDK. On this page, you **hand that work to Claude Code**. Claude Code ships with the bundled **`claude-api` skill**, which carries up-to-date reference material for the Claude API and Managed Agents. Combined with the `ant` command you set up in [2. Create an Agent with the CLI](/en/intermediate-lite/02_ant/), you can simply ask "list my agents", "run a session with this agent", or "create a new agent", and Claude Code prepares and runs the necessary commands and files.
+
+<Aside>
+Claude Code works autonomously, so the exact commands and output vary a little from run to run even for the same request. Treat the examples on this page as a guide to the general flow.
+</Aside>
+
+## 1. Preparation
+
+<Steps>
+
+1. Install [Claude Code](https://code.claude.com/docs/en/overview) and sign in. If you already use it, you are all set. Run `claude update` to get the latest version so you have the latest skill.
+
+1. Make sure `ant` is set up and `ant auth login` is done (step 1 of [2. Create an Agent with the CLI](/en/intermediate-lite/02_ant/)). Claude Code reads and writes your workspace's resources through `ant`.
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant auth status
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ant auth status
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside type="caution">
+    Claude Code may warn that the `ant auth login` credentials conflict with its own login. For this hands-on, the `ant` credentials take priority and you can ignore the warning. On Windows, work in the folder where you extracted `ant`, or add that folder to your PATH, so Claude Code can find the `ant` command.
+    </Aside>
+
+1. Create a working folder, move into it, and start Claude Code.
+
+    ```shell
+    mkdir claude-code-agents
+    cd claude-code-agents
+    claude
+    ```
+
+</Steps>
+
+## 2. What the `claude-api` Skill in Claude Code Can Do
+
+The `claude-api` skill is an Agent Skill bundled with Claude Code. No installation is needed; it activates automatically whenever you ask about the Claude API or Managed Agents. You can also invoke it explicitly by typing `/claude-api`.
+
+| What it does | How to use it |
+|------|------|
+| Consults up-to-date reference material | Activates automatically when Managed Agents comes up, so answers and generated code use current model IDs, pricing, and API shapes |
+| Creates a new agent through an interview | `/claude-api managed-agents-onboard` asks what you want to build, then writes configuration files for the agent, environment, and session in that order and applies them with `ant apply` |
+| Builds from a console template | Name a template such as `/claude-api managed-agents-onboard deep-researcher`. The "Deep researcher" from Beginner 1 can be built this way |
+| Reproduces an article or sample from the web | `/claude-api managed-agents-onboard <URL>` assembles an agent from a docs page or blog post |
+| Checks security settings | `/claude-api managed-agents-secure <agent id>` compares the agent with the official security guide and reports, read-only |
+| Operates existing resources | For requests like "list them" or "create a session", it assembles and runs commands such as `ant beta:agents list` and `ant beta:sessions create` |
+
+<Aside>
+The skill recommends **file-based management** with `ant apply`. Keep `agents/<name>/agent.md` (YAML frontmatter = agent config, body = system prompt) and `environment.yaml` in your repository, and `ant apply` pushes only the differences to the platform. The created IDs are recorded in `claude-lock.json`, which plays the same role as `ids.json` in [3. Create an Agent with the SDK](/en/intermediate-lite/03_sdk/).
+</Aside>
+
+## 3. List the Agents You Have Created
+
+<Steps>
+
+1. Ask Claude Code:
+
+    ```text
+    List the Managed Agents agents, environments, and sessions in this workspace. Put the IDs and names in a table.
+    ```
+
+1. Claude Code asks for permission to run `ant` commands; allow it. Under the hood it runs commands like these:
+
+    ```shell
+    ant beta:agents list --transform '{id,name,model}' --format jsonl
+    ant beta:environments list --transform '{id,name,config.networking.type}' --format jsonl
+    ant beta:sessions list --max-items 10 --transform '{id,status,agent.id}' --format jsonl
+    ```
+
+1. The agents you created on the previous pages (`AZ-900 Quiz Agent`, `AZ-900 Quiz Agent CLI`, `AZ-900 Quiz Agent SDK`, and so on) come back as a table.
+
+</Steps>
+
+<Aside>
+`ant` only returns resources in the workspace you chose at login. If something is missing from the list, check that the workspace shown by `ant auth status` is "workshop".
+</Aside>
+
+## 4. Invoke an Existing Agent
+
+<Steps>
+
+1. Name an agent from the list and ask for a session to be run.
+
+    ```text
+    Create a new session with "AZ-900 Quiz Agent CLI" and send "Give me one AZ-900 practice question". When the agent responds, show me the question and the options as they are.
+    ```
+
+1. Claude Code looks up the agent and environment IDs, then creates the session, sends the message, and receives the events. It does in one go what you did by hand with two terminals in [2. Create an Agent with the CLI](/en/intermediate-lite/02_ant/).
+
+    ```shell
+    SESSION_ID=$(ant beta:sessions create --agent agent_... --environment-id env_... --transform id -r)
+    ant beta:sessions:events send --session-id "$SESSION_ID" --event '{type: user.message, content: [{type: text, text: "Give me one AZ-900 practice question"}]}'
+    ant beta:sessions:events list --session-id "$SESSION_ID" --format jsonl --transform '{type,text:content.0.text}'
+    ```
+
+1. Once the question appears, ask it to send your answer. It goes to the same session, so the question → answer → verdict conversation continues.
+
+    ```text
+    Send "C" as my answer to the same session and show me the verdict and explanation.
+    ```
+
+1. When you are done, ask it to stop the session.
+
+    ```text
+    Archive this session.
+    ```
+
+</Steps>
+
+<Aside type="tip">
+`ant beta:sessions connect <session id>` attaches your terminal to a running session so you can type messages yourself. One handy pattern is to have Claude Code create the session and then continue the conversation in your own terminal.
+</Aside>
+
+## 5. Create a New Agent
+
+<Steps>
+
+1. Run the onboarding subcommand.
+
+    ```text
+    /claude-api managed-agents-onboard
+    ```
+
+1. It asks what kind of agent you want. Here we build the AWS quiz bot from [Beginner 3, Challenge 3](/en/beginner/03_exercise/#challenge-3-aws-quiz-bot-difficulty-).
+
+    ```text
+    An agent that fetches up-to-date information from the AWS Knowledge MCP server (https://knowledge-mcp.global.api.aws, no authentication) and asks AWS Certified Cloud Practitioner (CLF-C02) practice questions one at a time. After presenting the question and options, it must not reveal the answer until the user responds. After the answer, it gives the verdict, a one-line explanation per option, and three useful AWS documentation URLs. It remembers the user's answers and focuses on weak areas. Users interact with it by answering questions in chat.
+    ```
+
+1. Claude Code proposes an agent configuration including the model, tools, and MCP server. Review it and approve. If asked whether tools should run without confirmation or whether risky actions should be judged, "run without asking" is fine here because this agent only reads.
+
+    ```markdown title="agents/aws-quiz-agent/agent.md (example)"
+    ---
+    name: AWS Quiz Agent
+    model: claude-sonnet-5-5
+    mcp_servers:
+      - name: aws-knowledge
+        type: url
+        url: https://knowledge-mcp.global.api.aws
+    tools:
+      - type: agent_toolset_20260401
+        default_config: {permission_policy: {type: auto}}
+        configs:
+          - {name: web_fetch, enabled: false}
+          - {name: web_search, enabled: false}
+      - type: mcp_toolset
+        mcp_server_name: aws-knowledge
+        default_config: {permission_policy: {type: always_allow}}
+    ---
+
+    You are a study assistant that creates AWS Certified Cloud Practitioner (CLF-C02) practice questions using the AWS Knowledge MCP server.
+    ...
+    ```
+
+1. Next it asks about the environment. Pick an existing one (such as `Quiz-environment-cli`) or "Create a new environment". For a new one it asks about network scope; go with "Limited".
+
+1. For the credential vault, "Skip for now" is fine because the MCP server needs no authentication.
+
+1. Claude Code runs `ant apply --dry-run` and shows what will be applied (organization, workspace, resources to be created). If it looks right, approve, and `ant apply --yes` creates the agent and environment and records the IDs in `claude-lock.json`.
+
+1. Finally it asks "Run a test session?". Choose "Start session" and Claude Code writes `agents/aws-quiz-agent/session.yaml`, creates the session, and sends the first message. Attach your terminal with `ant beta:sessions connect` to follow the exchange.
+
+</Steps>
+
+<Aside>
+The created agent also appears in the console's "Agents" menu. From now on, to change its settings just edit `agent.md` and run `ant apply` (it is saved as a new version). Ask Claude Code to "add ... to the system prompt and apply it" and it will handle both the edit and `ant apply`.
+</Aside>
+
+## 6. Check the Security Settings (Optional)
+
+You can check whether an agent is configured for production use against the official [security guide](https://platform.claude.com/docs/en/managed-agents/secure-deployment).
+
+```text
+/claude-api managed-agents-secure agent_YOUR_AGENT_ID
+```
+
+It reads the agent's configuration, recent sessions, environment, and vault, and reports which settings to change and the recommended values. It is read-only, so nothing is modified.
+
+## Summary
+
+- The `claude-api` skill in Claude Code provides up-to-date Managed Agents reference material, an interactive agent-creation flow (`managed-agents-onboard`), and a security check (`managed-agents-secure`).
+- Everyday operations such as listing, creating sessions, and sending messages are as simple as asking in plain language; Claude Code assembles and runs the `ant` commands, which are the same ones you typed by hand in [2. Create an Agent with the CLI](/en/intermediate-lite/02_ant/).
+- The recommended flow is to manage agents and environments as files under `agents/` with `ant apply`. The IDs are recorded in `claude-lock.json`, and your application code (SDK) creates sessions from those IDs.
+
+<ShareOnX />
