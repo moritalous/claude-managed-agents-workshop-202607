@@ -67,8 +67,8 @@ You will create the following three components.
       template: deep-research
     ```
 
-    <Aside>
-    `model` is set to `claude-opus-5-5` with `effort: low`. If you want to keep costs down, you can switch it to `claude-sonnet-5` or similar in "Configuration" after the agent is created.
+    <Aside type="caution" title="Watch the cost of test sessions">
+    The template's `model` is `claude-opus-5-5` (`effort: low`). Opus is relatively expensive ($4 input / $20 output per 1M tokens), and because this template defines an outcome, the agent keeps rewriting the report until it passes grading, so **a single test can cost $1 to several dollars** (capped at $5). If you want to save credits, switch to `claude-sonnet-5` in "2. Change the model" below before running it.
     </Aside>
 
 1. Click "Use this template". The agent is created, and the "Progress" panel on the right shows four steps: "Create agent → Set up environment → Start session → Integrate". Next, click "Set up environment".
@@ -77,7 +77,29 @@ You will create the following three components.
 
 </Steps>
 
-## 2. Set Up the Environment
+## 2. Change the Model (Optional)
+
+If you want to keep costs down, change the model before setting up the environment. You can request configuration changes right in this chat box.
+
+<Steps>
+
+1. Type "Change the model to claude-sonnet-5" in the chat box below and send it.
+
+    ![](../../beginner/images/2026-10-27-model-change-typed.jpg)
+
+1. The "Agent configuration" panel opens on the right and shows the change as a diff. When asked "Save these changes as v2?", click "Save version".
+
+    ![](../../beginner/images/2026-10-27-model-change-diff.jpg)
+
+1. The agent is updated to v2 and the flow returns to the environment setup. You can close the panel with the "×" at its top right.
+
+</Steps>
+
+<Aside>
+Agent configurations are versioned. Each save creates v2, v3, and so on, and you can review past versions in the "Configuration" tab of the agent's page.
+</Aside>
+
+## 3. Set Up the Environment
 
 <Steps>
 
@@ -103,7 +125,7 @@ You will create the following three components.
 
 </Steps>
 
-## 3. Test in a Session
+## 4. Test in a Session
 
 <Steps>
 
@@ -123,6 +145,10 @@ You will create the following three components.
 
     ![](../../beginner/images/2026-10-27-session-grading.jpg)
 
+    <Aside type="caution">
+    Each revision consumes tokens. Once you have seen how it works, feel free to click "Stop session" without waiting for the grading loop to finish.
+    </Aside>
+
     <Aside type="tip">
     The "↗" icon at the top right of the panel opens the session's detail page in a new tab. There you can see the full event timeline and the files the agent created (under `/mnt/session/outputs/`).
 
@@ -133,7 +159,7 @@ You will create the following three components.
 
 </Steps>
 
-## 4. Adjust the Agent
+## 5. Adjust the Agent
 
 <Steps>
 
@@ -145,7 +171,11 @@ You will create the following three components.
 
     ![](../../beginner/images/2026-10-27-adjust-ack.jpg)
 
-1. Click "Stop session". Along with a summary of the test, the proposed change to the system prompt is shown as a diff. Click "Save version" to save it as a new version (v2).
+1. Click "Stop session". A summary of the test is shown. You may then be offered a list of candidate fixes (points raised by the grader, or the instruction you sent in chat); check the ones you want applied and submit.
+
+    ![](../../beginner/images/2026-10-27-adjust-options.jpg)
+
+1. The proposed change to the system prompt is shown as a diff. Click "Save version" to save it as a new version.
 
     ![](../../beginner/images/2026-10-27-adjust-diff.jpg)
 
@@ -161,7 +191,7 @@ You will create the following three components.
 
 </Steps>
 
-## 5. Integrate (Call from an Application)
+## 6. Integrate (Call from an Application)
 
 <Steps>
 
@@ -175,7 +205,7 @@ You will create the following three components.
 
 </Steps>
 
-## 6. Review the Resources You Created
+## 7. Review the Resources You Created
 
 <Steps>
 
@@ -202,6 +232,7 @@ You will create the following three components.
 - An agent is really just a configuration (YAML) that defines the model, system prompt, and tools. You can view and edit it anytime in the "Configuration" tab of the agent's page.
 - In the environment, you configured the sandbox's network access.
 - When a template defines an **outcome**, the session's output is graded automatically against a rubric, and the agent improves it on its own until it meets the bar.
-- When you want to change the agent's behavior, just say so in chat. After the test ends, a proposed system prompt change is shown and can be saved as a new version.
+- Changing the model or adjusting the agent's behavior is as simple as asking in chat: a proposed change is shown and can be saved as a new version (instructions sent during a test are applied after the test ends).
+- The default model is `claude-opus-5-5`. Test sessions cost money, so switch models when appropriate.
 
 <ShareOnX />
