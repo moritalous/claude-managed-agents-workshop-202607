@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" width="760" height="300" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Hiragino Sans', 'Noto Sans JP', sans-serif" role="img" aria-label="The four concepts of Claude Managed Agents">
+  <rect width="760" height="300" fill="#ffffff"/>
+
+  <!-- Application -->
+  <rect x="20" y="100" width="150" height="100" rx="10" fill="#f4f1ec" stroke="#8c877f" stroke-width="1.5"/>
+  <text x="95" y="143" text-anchor="middle" font-size="15" font-weight="700" fill="#1f1d1a">Application</text>
+  <text x="95" y="166" text-anchor="middle" font-size="11.5" fill="#5c5852">your code / Console</text>
+
+  <!-- Event arrow -->
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#5c5852"/>
+    </marker>
+  </defs>
+  <line x1="178" y1="150" x2="292" y2="150" stroke="#5c5852" stroke-width="1.8" marker-start="url(#ah)" marker-end="url(#ah)"/>
+  <text x="235" y="132" text-anchor="middle" font-size="14" font-weight="700" fill="#1f1d1a">Event</text>
+  <text x="235" y="172" text-anchor="middle" font-size="11" fill="#5c5852">send messages</text>
+  <text x="235" y="188" text-anchor="middle" font-size="11" fill="#5c5852">receive results</text>
+
+  <!-- Session -->
+  <rect x="300" y="30" width="440" height="240" rx="14" fill="#fbf9f5" stroke="#b8b1a6" stroke-width="1.5" stroke-dasharray="6 4"/>
+  <text x="322" y="60" font-size="15" font-weight="700" fill="#1f1d1a">Session</text>
+  <text x="322" y="80" font-size="11.5" fill="#5c5852">a running agent inside an environment</text>
+
+  <!-- Agent -->
+  <rect x="325" y="105" width="185" height="135" rx="10" fill="#e9e3f6" stroke="#6b5ca8" stroke-width="1.5"/>
+  <text x="417" y="133" text-anchor="middle" font-size="15" font-weight="700" fill="#1f1d1a">Agent</text>
+  <text x="417" y="160" text-anchor="middle" font-size="11.5" fill="#3f3b47">model</text>
+  <text x="417" y="178" text-anchor="middle" font-size="11.5" fill="#3f3b47">system prompt</text>
+  <text x="417" y="196" text-anchor="middle" font-size="11.5" fill="#3f3b47">tools / MCP / skills</text>
+  <text x="417" y="214" text-anchor="middle" font-size="11.5" fill="#3f3b47">(reusable, versioned)</text>
+
+  <!-- plus -->
+  <circle cx="520" cy="172" r="12" fill="#ffffff" stroke="#b8b1a6" stroke-width="1.2"/>
+  <text x="520" y="177" text-anchor="middle" font-size="15" font-weight="700" fill="#5c5852">+</text>
+
+  <!-- Environment -->
+  <rect x="530" y="105" width="185" height="135" rx="10" fill="#e2efe8" stroke="#3f8a67" stroke-width="1.5"/>
+  <text x="622" y="133" text-anchor="middle" font-size="15" font-weight="700" fill="#1f1d1a">Environment</text>
+  <text x="622" y="160" text-anchor="middle" font-size="11.5" fill="#34443c">cloud sandbox</text>
+  <text x="622" y="178" text-anchor="middle" font-size="11.5" fill="#34443c">network settings</text>
+  <text x="622" y="196" text-anchor="middle" font-size="11.5" fill="#34443c">packages</text>
+  <text x="622" y="214" text-anchor="middle" font-size="11.5" fill="#34443c">(where it runs)</text>
+</svg>

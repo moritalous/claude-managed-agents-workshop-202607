@@ -14,9 +14,9 @@ So far, you have experienced two ways to build an agent: [creating one from a te
 There is no single right answer. The goal is to turn "an agent like this might be handy" into something real. When you finish, share it with the people around you!
 </Aside>
 
-Click "Quickstart" to start creating a new agent.
+Click "Create" in the "Agents" menu to start creating a new agent.
 
-![](../../beginner/images/2026-08-10-02-32-27.png)
+![](../../beginner/images/2026-10-27-create.jpg)
 
 ## Recap: The Two Approaches
 
@@ -80,7 +80,7 @@ Remember the user's answers and focus follow-up questions on their weaker areas.
 ```
 
 <Aside>
-When asked about the environment's network access, choose a setting that allows connecting to the MCP server ("Unrestricted", or limited to knowledge-mcp.global.api.aws).
+When asked about the environment's network access, choose a setting that allows connecting to the MCP server ("Unlimited", or limited to knowledge-mcp.global.api.aws).
 </Aside>
 
 ### Challenge 4: Your Own Idea (Difficulty ★★★)
@@ -93,15 +93,15 @@ Apply the "pattern for good instructions" and build your own agent from scratch.
 
 ## Tips for Verifying Behavior
 
-- Use the session's "Run test" to check whether the responses match your intent.
-- When you want to change the behavior, give instructions in the chat pane on the left and the system prompt is updated (the technique you tried in the second half of [page 1](/en/beginner/01_quickstart/)).
-- You can also edit the YAML directly in the "Configuration" tab.
-- You can review the agents and sessions you created anytime from the corresponding menus in the console.
+- Click "Start session" to launch a test session and check whether the responses match your intent.
+- When you want to change the behavior, give instructions in the chat pane on the left. When you stop the session, a proposed change is shown and you can save it as a new version (the technique you tried in the second half of [page 1](/en/beginner/01_quickstart/)).
+- You can also edit the YAML directly in the "Agent configuration" panel on the right, or in the "Configuration" tab of the agent's page.
+- You can review the agents and sessions you created anytime from the submenus of the "Agents" menu.
 
 ## Summary
 
 - There are two entry points for building agents — "from a template" and "from scratch via chat" — and both follow the same **agent → environment → session** flow.
 - Give instructions as the three-part set of **role, rules, and external connections**, and the agent is much more likely to behave as intended.
-- Once built, verify the behavior with "Run test" and fine-tune via chat. Repeating this cycle is how you grow your agent.
+- Once built, verify the behavior with "Start session" and fine-tune via chat. Repeating this cycle is how you grow your agent.
 
 <ShareOnX />

@@ -10,6 +10,8 @@ import ShareOnX from '../../../../components/ShareOnX.astro';
 
 On this page, you will build a **web research agent** entirely through the Console UI, without writing a single line of code. We will use the Jina AI MCP server to connect to external tools.
 
+In the beginner section, the "Create" chat screen built the agent, environment, and session for you. On this page, you assemble the parts one by one yourself from the submenus of the "Agents" menu (Credential vaults, Environments, Agents, Sessions).
+
 Once finished, you can simply ask in chat, "Search for the latest papers on RAG," and the agent will perform web searches, read the papers, and answer with citations.
 
 ![](../../intermediate/images/2026-07-04-15-05-21.png)
@@ -35,7 +37,7 @@ You will create the following four components.
 In total, about 20 tools are available, including image search and PDF extraction. You can get an API key for free without registering a credit card, and the free token allowance is enough to complete this hands-on exercise.
 
 <Aside type="tip" title="If Jina AI is unavailable">
-If you hit a quota limit and cannot use the Jina AI MCP server, use the [Firecrawl](https://www.firecrawl.dev/) MCP server instead. [Troubleshooting: Jina AI is unavailable due to quota limits](/en/reference/troubleshooting/#jina-ai-is-unavailable-due-to-quota-limits) covers how to sign up and what to substitute on this page.
+If you hit a quota limit and cannot use the Jina AI MCP server, move on to [Intermediate (Lite)](/en/intermediate-lite/01_console/), which walks through the same flow with the Microsoft Learn MCP server that needs no API key. If you prefer to keep the Jina AI-style setup, you can use the [Firecrawl](https://www.firecrawl.dev/) MCP server instead. [Troubleshooting: Jina AI is unavailable due to quota limits](/en/reference/troubleshooting/#jina-ai-is-unavailable-due-to-quota-limits) covers how to sign up and what to substitute on this page.
 </Aside>
 
 ## 1. Get a Jina AI API Key
@@ -55,34 +57,37 @@ First, create a credential vault. A credential vault is a mechanism for securely
 
 <Steps>
 
-1. Select the "Credential vaults" menu, then click "Create vault".
+1. Select "Credential vaults" from the submenu of the "Agents" menu, then click "Create vault".
 
-    ![](../../intermediate/images/2026-07-04-13-31-40.png)
+    ![](../../intermediate/images/2026-10-27-vaults.jpg)
 
 1. Enter "Vault" as the vault name and click "Continue".
 
-    ![](../../intermediate/images/2026-07-04-13-33-00.png)
+    ![](../../intermediate/images/2026-10-27-vault-create.jpg)
 
     <Aside type="caution">
     Credential vaults are shared within the workspace.
     </Aside>
 
-1. Next, add a credential.
-    Enter "Jina-ai" as the name and select "Bearer token" as the type.
+1. The "Add credential" dialog opens next. Enter "Jina-ai" as the name.
 
-    ![](../../intermediate/images/2026-07-04-13-36-41.png)
+    ![](../../intermediate/images/2026-10-27-credential-add.jpg)
 
-1. Click MCP server and enter "`https://mcp.jina.ai/v1`" in the custom URL field.
+1. The type defaults to "MCP OAuth", so change it to "Bearer token".
 
-    ![](../../intermediate/images/2026-07-04-13-39-00.png)
+    ![](../../intermediate/images/2026-10-27-credential-type.jpg)
 
-1. Click "Custom server".
+1. Click "MCP server". A list of presets (Google Drive, Gmail, Notion, and so on) appears.
 
-    ![](../../intermediate/images/2026-07-04-13-40-15.png)
+    ![](../../intermediate/images/2026-10-27-credential-mcp.jpg)
 
-1. Enter your Jina AI API key as the token. Agree to (check) the notice about credentials, then click "Add credential".
+1. Type "`https://mcp.jina.ai/v1`" in the search box and click the "Custom server" entry that appears.
 
-    ![](../../intermediate/images/2026-07-04-13-46-12.png)
+    ![](../../intermediate/images/2026-10-27-credential-custom.jpg)
+
+1. Enter your Jina AI API key in "Token". Agree to (check) the notice about credentials, then click "Add credential".
+
+    ![](../../intermediate/images/2026-10-27-credential-token.jpg)
 
 </Steps>
 
@@ -90,21 +95,21 @@ First, create a credential vault. A credential vault is a mechanism for securely
 
 <Steps>
 
-1. Select the "Environments" menu, then click "Create environment".
+1. Select "Environments" from the submenu, then click "Create environment".
 
-    ![](../../intermediate/images/2026-07-04-14-12-04.png)
+    ![](../../beginner/images/2026-10-27-environments-list.jpg)
 
-1. Enter "Jina-environment" as the name and click "Create".
+1. Leave hosting as "Cloud" and enter "Jina-environment" as the name.
 
-    ![](../../intermediate/images/2026-07-04-14-13-44.png)
+    ![](../../intermediate/images/2026-10-27-env-new.jpg)
 
-1. Click "Edit".
+1. Scroll down to "Network". Select "Limited" and check "Allow MCP servers". Finally, click "Create environment".
 
-    ![](../../intermediate/images/2026-07-04-14-14-36.png)
+    ![](../../intermediate/images/2026-10-27-env-new-network.jpg)
 
-1. Check "Allow network access for MCP servers" and click "Save changes".
-
-    ![](../../intermediate/images/2026-07-04-14-15-36.png)
+    <Aside>
+    Unlike the environment you created in the beginner section, this agent does not use the `web_search` tool and only reaches the outside world through the MCP server, so "Limited" networking is sufficient.
+    </Aside>
 
 </Steps>
 
@@ -112,11 +117,17 @@ First, create a credential vault. A credential vault is a mechanism for securely
 
 <Steps>
 
-1. Select the "Agents" menu, then click "Create agent".
+1. Select "Agents" from the submenu, then click "Create agent".
 
-    ![](../../intermediate/images/2026-07-04-14-04-21.png)
+    ![](../../beginner/images/2026-10-27-agents-list.jpg)
 
-1. Enter the following YAML in the agent configuration field and click "Create agent".
+1. Click "Raw" to the right of "Agent configuration" to switch to the YAML editor.
+
+    ![](../../intermediate/images/2026-10-27-agent-new.jpg)
+
+1. Delete everything in the editor, replace it with the following YAML, and click "Create agent".
+
+    ![](../../intermediate/images/2026-10-27-agent-new-raw.jpg)
 
     ```yaml
     name: Jina Web Research Agent
@@ -124,7 +135,7 @@ First, create a credential vault. A credential vault is a mechanism for securely
       id: claude-haiku-4-5
       speed: standard
     description: A demo agent for web search, page reading, and academic research using the Jina AI MCP server.
-    system: You are a research assistant that leverages Jina AI's search and reading tools. When you receive a question, use search_web (or search_arxiv / search_ssrn for academic topics) to find relevant sources, then use read_url or parallel_read_url to fetch the full text of the most promising results. Do not rely solely on search result snippets. Combine information from multiple sources, cite the URLs you used, and clearly indicate any uncertainty or conflicting information. For efficiency, prefer the parallel_* tools when searching or reading multiple sources at once. When asked to summarize or extract facts from a specific page, read that page directly with read_url. Keep your answers concise and well organized, and base them on the retrieved content rather than prior knowledge.
+    system: You are a research assistant that leverages Jina AI's search and reading tools. When you receive a question, use search_web (or search_arxiv / search_ssrn for academic topics) to find relevant sources, then use read_url or parallel_read_url to fetch the full text of promising results. Do not rely on search-result snippets alone. Combine information from multiple sources, cite the URLs you used, and clearly flag any uncertainty or conflicting information. For efficiency, prefer the parallel_* tools when searching or reading multiple sources at once. If asked to summarize or extract facts from a specific page, read that page directly with read_url. Keep answers concise and well organized, and base them on the retrieved content rather than prior knowledge.
     mcp_servers:
       - name: jina
         type: url
@@ -141,20 +152,27 @@ First, create a credential vault. A credential vault is a mechanism for securely
     metadata: {}
     ```
 
+    <Aside>
+    You can also describe the agent in the "Starting point" box and click "Generate" to auto-generate the YAML, just like in the beginner section. Switching back to "Rendered" lets you edit the name, model, system prompt, and so on as a form.
+    </Aside>
+
 </Steps>
 
 ## 5. Create a Session
 
 <Steps>
 
-1. Select the "Sessions" menu, then click "Create session".
+1. Select "Sessions" from the submenu, then click "Create session".
 
-    ![](../../intermediate/images/2026-07-04-14-54-48.png)
+    ![](../../beginner/images/2026-10-27-sessions-list.jpg)
 
+1. Set the agent to "Jina Web Research Agent" and the environment to "Jina-environment". Under "Credential vault", click "Add vault" and select "Vault", then click "Create session".
 
-1. Set the agent to "Jina Web Research Agent", the environment to "Jina-environment", and the credential vault to "Vault", then check the notice checkbox. Click "Create session".
+    ![](../../intermediate/images/2026-10-27-session-create.jpg)
 
-    ![](../../intermediate/images/2026-07-04-14-57-29.png)
+    <Aside>
+    If you enter a "Budget", the session stops automatically once the cost calculated at list prices reaches that amount.
+    </Aside>
 
 </Steps>
 
@@ -163,11 +181,11 @@ First, create a credential vault. A credential vault is a mechanism for securely
 
 <Steps>
 
-1. Type something like "Search for the latest papers on RAG" in the chat box and send it.
+1. The session's detail page opens. Type something like "Search for the latest papers on RAG" in the chat box at the bottom of the screen and send it.
 
     ![](../../intermediate/images/2026-07-04-15-01-28.png)
 
-1. The agent retrieves information via the MCP server and returns an answer.
+1. The agent retrieves information via the MCP server and returns an answer. The inspector on the right shows session information, events, and tool calls.
 
     ![](../../intermediate/images/2026-07-04-15-05-21.png)
 
@@ -176,7 +194,7 @@ First, create a credential vault. A credential vault is a mechanism for securely
 ## Summary
 
 - Store secrets such as API keys in a **credential vault** and attach it when creating a session. This keeps keys out of your system prompt and conversation.
-- Using an MCP server requires three things: (1) a credential in the vault (one per endpoint URL), (2) network access to MCP servers enabled in the environment, and (3) `mcp_servers` and `mcp_toolset` definitions on the agent.
+- Using an MCP server requires three things: (1) a credential in the vault (one per endpoint URL), (2) network access to MCP servers enabled in the environment ("Limited" + "Allow MCP servers"), and (3) `mcp_servers` and `mcp_toolset` definitions on the agent.
 - Assembling the building blocks of **environment, agent, and session (plus a vault when needed)** is the basic pattern of Managed Agents. On the following pages, we will build the same setup with the CLI and the SDK.
 
 <ShareOnX />

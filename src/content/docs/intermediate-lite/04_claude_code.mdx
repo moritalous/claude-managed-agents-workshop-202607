@@ -1,0 +1,205 @@
+---
+title: 4. Claude Codeから操作する
+description: Claude Codeにバンドルされたclaude-apiスキルとant CLIを使って、自然言語でClaude Managed Agentsのエージェントを一覧・実行・作成するチュートリアル。
+sidebar:
+  order: 4
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../components/ShareOnX.astro';
+
+ここまでは、コンソール・CLI・SDKで自分の手を動かしてエージェントを組み立てました。このページでは、その作業を**Claude Codeに任せる**方法を体験します。Claude Codeには、Claude APIとManaged Agentsの最新リファレンスを持つ**`claude-api`スキル**がバンドルされています。[2. CLIでエージェントを作成](/intermediate-lite/02_ant/)でセットアップした`ant`コマンドと組み合わせると、「エージェントを一覧して」「このエージェントでセッションを動かして」「新しいエージェントを作って」と日本語で頼むだけで、Claude Codeが必要なコマンドやファイルを用意して実行してくれます。
+
+<Aside>
+Claude Codeは自律的に動くため、同じ指示でも実行するコマンドや出力は毎回少しずつ変わります。このページの実行例は「このような流れになる」という目安として見てください。
+</Aside>
+
+## 1. 準備
+
+<Steps>
+
+1. [Claude Code](https://code.claude.com/docs/ja/overview)をインストールし、ログインしておきます。すでにお使いの方はそのままで構いません。最新のスキルを使うため、`claude update`で最新版にしておくことをおすすめします。
+
+1. `ant`のセットアップと`ant auth login`が済んでいることを確認します（[2. CLIでエージェントを作成](/intermediate-lite/02_ant/)の手順1）。Claude Codeは`ant`を通じてワークスペースのリソースを読み書きします。
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    ```shell
+    ./ant auth status
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    ```shell
+    ant auth status
+    ```
+    </TabItem>
+
+    </Tabs>
+
+    <Aside type="caution">
+    `ant auth login`のログイン情報とClaude Code自身のログインが競合している旨の警告がClaude Codeに表示されることがあります。このハンズオンでは`ant`の認証を優先し、警告は無視して構いません。Windowsでは、`ant`を展開したフォルダーで作業するか、`ant`のフォルダーにPATHを通しておくと、Claude Codeが`ant`コマンドを見つけられます。
+    </Aside>
+
+1. 作業用のフォルダーを作って移動し、Claude Codeを起動します。
+
+    ```shell
+    mkdir claude-code-agents
+    cd claude-code-agents
+    claude
+    ```
+
+</Steps>
+
+## 2. Claude Codeの`claude-api`スキルでできること
+
+`claude-api`スキルは、Claude Codeに同梱されているAgent Skillです。インストールは不要で、Claude APIやManaged Agentsに関する依頼をすると自動で有効になります。`/claude-api`と入力して明示的に呼び出すこともできます。
+
+| できること | 使い方 |
+|------|------|
+| 最新のリファレンスを参照する | Managed Agentsの話題を出すと自動で有効化。モデルID・料金・APIの最新仕様を踏まえて回答やコード生成をしてくれる |
+| 新しいエージェントを対話形式で作る | `/claude-api managed-agents-onboard` ・・・ 作りたいものを聞き取り、エージェント・環境・セッションの順に設定ファイルを作って`ant apply`で反映する |
+| コンソールのテンプレートから作る | `/claude-api managed-agents-onboard deep-researcher` のようにテンプレート名を指定。初級1で使った「詳細リサーチャー」もここから作れる |
+| Web上の記事やサンプルを再現する | `/claude-api managed-agents-onboard <URL>` ・・・ ドキュメントやブログの内容からエージェントを組み立てる |
+| セキュリティ設定をチェックする | `/claude-api managed-agents-secure <エージェントID>` ・・・ 公式のセキュリティガイドと照らし合わせて読み取り専用でレポートする |
+| 既存リソースを操作する | 「一覧して」「セッションを作って」などの依頼に対して、`ant beta:agents list`や`ant beta:sessions create`などのコマンドを組み立てて実行する |
+
+<Aside>
+スキルは`ant apply`による**ファイルベースの管理**を推奨しています。`agents/<名前>/agent.md`（YAMLフロントマター＝エージェント設定、本文＝システムプロンプト）や`environment.yaml`をリポジトリに置き、`ant apply`で差分だけをプラットフォームに反映します。作成されたIDは`claude-lock.json`に記録されるので、[3. SDKでエージェントを作成](/intermediate-lite/03_sdk/)の`ids.json`と同じ役割をこのファイルが果たします。
+</Aside>
+
+## 3. 作成済みのエージェントを一覧する
+
+<Steps>
+
+1. Claude Codeに次のように頼みます。
+
+    ```text
+    このワークスペースにあるManaged Agentsのエージェント・環境・セッションを一覧して。IDと名前を表にまとめてください。
+    ```
+
+1. Claude Codeが`ant`コマンドを実行してよいか確認してくるので、許可します。内部では次のようなコマンドが実行されます。
+
+    ```shell
+    ant beta:agents list --transform '{id,name,model}' --format jsonl
+    ant beta:environments list --transform '{id,name,config.networking.type}' --format jsonl
+    ant beta:sessions list --max-items 10 --transform '{id,status,agent.id}' --format jsonl
+    ```
+
+1. ここまでのページで作ったエージェント（`AZ-900 Quiz Agent`、`AZ-900 Quiz Agent CLI`、`AZ-900 Quiz Agent SDK`など）が表で返ってきます。
+
+</Steps>
+
+<Aside>
+`ant`はログイン時に選んだワークスペースのリソースだけを返します。一覧に見当たらない場合は、`ant auth status`で表示されるワークスペースが「workshop」になっているか確認してください。
+</Aside>
+
+## 4. 作成済みのエージェントを呼び出す
+
+<Steps>
+
+1. 一覧にあったエージェントを指定して、セッションの実行を頼みます。
+
+    ```text
+    「AZ-900 Quiz Agent CLI」で新しいセッションを作って、「AZ-900の練習問題を1問出題してください」と送ってください。エージェントの応答が返ってきたら、問題文と選択肢をそのまま見せてください。
+    ```
+
+1. Claude Codeは、エージェントIDと環境IDを調べたうえで、セッションの作成・メッセージ送信・イベントの受信を行います。[2. CLIでエージェントを作成](/intermediate-lite/02_ant/)でターミナルを2つ使って手で行った作業を、まとめて代行してくれます。
+
+    ```shell
+    SESSION_ID=$(ant beta:sessions create --agent agent_... --environment-id env_... --transform id -r)
+    ant beta:sessions:events send --session-id "$SESSION_ID" --event '{type: user.message, content: [{type: text, text: "AZ-900の練習問題を1問出題してください"}]}'
+    ant beta:sessions:events list --session-id "$SESSION_ID" --format jsonl --transform '{type,text:content.0.text}'
+    ```
+
+1. 問題が表示されたら、続けて回答を送ってもらいます。同じセッションに送るので、出題 → 回答 → 正誤判定の会話がつながります。
+
+    ```text
+    同じセッションに「C」と回答を送って、正誤判定と解説を見せてください。
+    ```
+
+1. 確認が終わったら、セッションを停止してもらいます。
+
+    ```text
+    このセッションをアーカイブしてください。
+    ```
+
+</Steps>
+
+<Aside type="tip">
+`ant beta:sessions connect <セッションID>`を実行すると、実行中のセッションにターミナルを接続して、自分でメッセージを打ち込みながらやり取りできます。Claude Codeにセッションを作ってもらい、会話は自分のターミナルで続ける、という使い方もできます。
+</Aside>
+
+## 5. 新しいエージェントを作成する
+
+<Steps>
+
+1. オンボーディング用のサブコマンドを実行します。
+
+    ```text
+    /claude-api managed-agents-onboard
+    ```
+
+1. 「どんなエージェントを作りたいか」を聞かれるので、作りたいものを説明します。ここでは[初級3のお題3](/beginner/03_exercise/#お題3aws版クイズボット難易度-)と同じ、AWS版のクイズボットを作ってみます。
+
+    ```text
+    AWS Knowledge MCPサーバー（https://knowledge-mcp.global.api.aws、認証不要）から最新の情報を取得して、AWS認定「Cloud Practitioner」（CLF-C02）の練習問題を1問ずつ出題するエージェント。問題文と選択肢を提示したら、ユーザーが回答するまで正解を明かさない。回答後は正誤と各選択肢の解説、参考になるAWS公式ドキュメントのURLを3つ示す。ユーザーの回答を記憶して、苦手分野を重点的に出題する。ユーザーがチャットで質問に答える形で使う。
+    ```
+
+1. Claude Codeがエージェント設定を提案してきます。モデル・ツール・MCPサーバーの設定が含まれているので、内容を確認して承認します。ツールの実行確認（「確認なしで実行」か「リスクのある操作は判定する」か）を聞かれたら、このエージェントは読み取りしかしないので「確認なしで実行」で構いません。
+
+    ```markdown title="agents/aws-quiz-agent/agent.md（例）"
+    ---
+    name: AWS Quiz Agent
+    model: claude-sonnet-5-5
+    mcp_servers:
+      - name: aws-knowledge
+        type: url
+        url: https://knowledge-mcp.global.api.aws
+    tools:
+      - type: agent_toolset_20260401
+        default_config: {permission_policy: {type: auto}}
+        configs:
+          - {name: web_fetch, enabled: false}
+          - {name: web_search, enabled: false}
+      - type: mcp_toolset
+        mcp_server_name: aws-knowledge
+        default_config: {permission_policy: {type: always_allow}}
+    ---
+
+    あなたはAWS Knowledge MCPサーバーを使ってAWS認定Cloud Practitioner（CLF-C02）の練習問題を作成する学習アシスタントです。
+    ...
+    ```
+
+1. 続いて環境を聞かれます。既存の環境（`Quiz-environment-cli`など）を選ぶか、「新しい環境を作成」を選びます。新規作成の場合はネットワークの範囲を聞かれるので、「制限付き」で進めます。
+
+1. 認証情報ボールトの確認は、MCPサーバーが認証不要なので「今はスキップ」で構いません。
+
+1. Claude Codeが`ant apply --dry-run`で反映内容（組織・ワークスペース・作成されるリソース）を表示します。問題なければ承認すると、`ant apply --yes`でエージェントと環境が作成され、`claude-lock.json`にIDが記録されます。
+
+1. 最後に「テストセッションを実行しますか？」と聞かれます。「セッションを開始」を選ぶと、Claude Codeが`agents/aws-quiz-agent/session.yaml`を書いてセッションを作成し、最初のメッセージを送ります。`ant beta:sessions connect`でターミナルを接続してやり取りを確認しましょう。
+
+</Steps>
+
+<Aside>
+作成されたエージェントは、コンソールの「エージェント」メニューにも表示されます。以後、設定を変えたいときは`agent.md`を編集して`ant apply`を実行するだけです（新しいバージョンとして保存されます）。Claude Codeに「システムプロンプトに〜を追加して反映して」と頼めば、編集から`ant apply`までやってくれます。
+</Aside>
+
+## 6. セキュリティ設定をチェックする（任意）
+
+作ったエージェントが本番運用に向いた設定になっているか、公式の[セキュリティガイド](https://platform.claude.com/docs/ja/managed-agents/secure-deployment)に照らしてチェックできます。
+
+```text
+/claude-api managed-agents-secure agent_ここにエージェントID
+```
+
+エージェントの設定・最近のセッション・環境・ボールトを読み取り、変更すべき設定とその推奨値をレポートします。読み取り専用なので、何も変更されません。
+
+## まとめ
+
+- Claude Codeの`claude-api`スキルは、Managed Agentsの最新リファレンスと、エージェント作成の対話フロー（`managed-agents-onboard`）、セキュリティチェック（`managed-agents-secure`）を提供します。
+- 一覧・セッション作成・メッセージ送信といった日常の操作は、日本語で頼むだけでClaude Codeが`ant`コマンドを組み立てて実行してくれます。中身は[2. CLIでエージェントを作成](/intermediate-lite/02_ant/)で手で打ったコマンドと同じです。
+- エージェントと環境は`agents/`配下のファイルと`ant apply`で管理するのが推奨の流れです。IDは`claude-lock.json`に記録され、アプリケーションのコード（SDK）はそのIDでセッションを作ります。
+
+<ShareOnX />

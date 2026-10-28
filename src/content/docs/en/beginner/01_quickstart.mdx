@@ -1,6 +1,6 @@
 ---
 title: 1. Create an Agent from a Template
-description: A tutorial that creates and runs a web research agent from the "Deep researcher" quickstart template.
+description: A tutorial that creates and runs a web research agent from the "Deep researcher" template.
 sidebar:
   order: 1
 ---
@@ -8,11 +8,11 @@ sidebar:
 import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 import ShareOnX from '../../../../components/ShareOnX.astro';
 
-On this page, you will use the "Deep researcher" quickstart template to create a **web research agent**. Just by picking a template, you can experience the full flow from creating an agent to running it in a session.
+On this page, you will use the "Deep researcher" template to create a **web research agent**. Just by picking a template, you can experience the full flow from creating an agent to running it in a session.
 
 Once complete, you can simply send a question in the chat, and the agent will break it down into sub-questions, search the web, and respond with a report that includes citations.
 
-![](../../beginner/images/2026-07-04-07-59-08.png)
+![](../../beginner/images/2026-10-27-session-grading.jpg)
 
 You will create the following three components.
 
@@ -26,29 +26,28 @@ You will create the following three components.
 
 <Steps>
 
-1. Select "Quickstart" from the "Managed Agents" menu.
+1. Click "Agents" in the sidebar, then select "Create" from the submenu.
 
-    ![](../../beginner/images/2026-07-04-07-22-38.png)
+    ![](../../beginner/images/2026-10-27-create.jpg)
 
-    Make sure the workspace is set to "workshop".
+    Make sure the workspace at the top of the submenu is set to "workshop".
 
-1. Select "Deep researcher" from the templates.
+1. Click "Deep researcher" in the list of templates. A dialog shows the contents of the template.
 
-    ![](../../beginner/images/2026-07-04-07-24-09.png)
+    ![](../../beginner/images/2026-10-27-template-dialog.jpg)
 
+    This template defines an **outcome**. Expand "How the outcome is judged" to see the rubric (grading criteria) used to score the agent's output. In a session, the final report is graded automatically against this rubric, and the agent keeps revising until it meets the bar.
 
-1. Click "Use template".
-
-    ![](../../beginner/images/2026-07-04-07-25-04.png)
+    ![](../../beginner/images/2026-10-27-template-outcome.jpg)
 
     **Template contents**
 
-    <Tabs>
-    <TabItem label="English (original)">
     ```yaml
     name: Deep researcher
     description: Conducts multi-step web research with source synthesis and citations.
-    model: claude-sonnet-5
+    model:
+      id: claude-opus-5-5
+      effort: low
     system: |-
       You are a research agent. Given a question or topic:
 
@@ -56,159 +55,184 @@ You will create the following three components.
       2. For each sub-question, run targeted web searches and fetch the most authoritative sources (prefer primary sources, official docs, peer-reviewed work over blog posts and aggregators).
       3. Read the sources in full — don't skim. Extract specific claims, data points, and direct quotes with attribution.
       4. Synthesize a report that answers the original question. Structure it by sub-question, cite every non-obvious claim inline, and close with a "confidence & gaps" section noting where sources disagreed or where you couldn't find good coverage.
+      5. Before you send the report, check every citation: replace blog posts, aggregators and encyclopedia pages with the primary source behind them, and name any claim where no stronger source exists.
 
       Be skeptical. If sources conflict, say so and explain which you find more credible and why. Don't paper over uncertainty with confident-sounding prose.
     tools:
       - type: agent_toolset_20260401
+        default_config:
+          permission_policy:
+            type: auto
     metadata:
       template: deep-research
     ```
 
-    </TabItem>
-    <TabItem label="Japanese">
+    <Aside type="caution" title="Watch the cost of test sessions">
+    The template's `model` is `claude-opus-5-5` (`effort: low`). Opus is relatively expensive ($4 input / $20 output per 1M tokens), and because this template defines an outcome, the agent keeps rewriting the report until it passes grading, so **a single test can cost $1 to several dollars** (capped at $5). If you want to save credits, switch to `claude-sonnet-5` in "2. Change the model" below before running it.
+    </Aside>
 
-    ```yaml
-    name: ディープリサーチャー
-    description: 複数ステップのウェブ調査を行い、情報源の統合と引用を行います。
-    model: claude-sonnet-5
-    system: |-
-      あなたはリサーチエージェントです。質問やトピックが与えられたら:
+1. Click "Use this template". The agent is created, and the "Progress" panel on the right shows four steps: "Create agent → Set up environment → Start session → Integrate". Next, click "Set up environment".
 
-      1. トピック全体をカバーできるような、具体的な3〜5個のサブクエスチョンに分解してください。
-      2. 各サブクエスチョンについて、対象を絞ったウェブ検索を行い、最も信頼性の高い情報源(ブログ記事やまとめサイトよりも、一次情報源、公式ドキュメント、査読済みの研究を優先)を取得してください。
-      3. 情報源は流し読みせず、しっかりと読み込んでください。具体的な主張、データ、直接引用を出典とともに抽出してください。
-      4. 元の質問に答えるレポートを統合してください。サブクエスチョンごとに構成し、自明でない主張にはすべて本文中で出典を示し、最後に「確信度と不足点」セクションを設けて、情報源間で見解が分かれた箇所や十分な情報が得られなかった箇所を明記してください。
-
-      懐疑的な姿勢を保ってください。情報源同士が矛盾する場合はその旨を明示し、どちらがより信頼できるか、その理由とともに説明してください。自信ありげな文章で不確実性を覆い隠さないでください。
-    tools:
-      - type: agent_toolset_20260401
-    metadata:
-      template: deep-research
-    ```
-    </TabItem>
-    </Tabs>
-
-
-1. The agent has been created. Next, click "Next: Configure environment".
-
-    ![](../../beginner/images/2026-07-04-07-31-59.png)
+    ![](../../beginner/images/2026-10-27-agent-created.jpg)
 
 </Steps>
 
-## 2. Configure the Environment
+## 2. Change the Model (Optional)
+
+If you want to keep costs down, change the model before setting up the environment. You can request configuration changes right in this chat box.
 
 <Steps>
 
-1. Configure network access. Select "Unrestricted".
+1. Type "Change the model to claude-sonnet-5" in the chat box below and send it.
 
-    ![](../../beginner/images/2026-07-04-07-32-42.png)
+    ![](../../beginner/images/2026-10-27-model-change-typed.jpg)
 
+1. The "Agent configuration" panel opens on the right and shows the change as a diff. When asked "Save these changes as v2?", click "Save version".
+
+    ![](../../beginner/images/2026-10-27-model-change-diff.jpg)
+
+1. The agent is updated to v2 and the flow returns to the environment setup. You can close the panel with the "×" at its top right.
+
+</Steps>
+
+<Aside>
+Agent configurations are versioned. Each save creates v2, v3, and so on, and you can review past versions in the "Configuration" tab of the agent's page.
+</Aside>
+
+## 3. Set Up the Environment
+
+<Steps>
+
+1. You are asked about network access. Select "Unrestricted".
+
+    ![](../../beginner/images/2026-10-27-env-network.jpg)
 
     <Aside>
-
-    You can give instructions through the chat box. For example, if you want responses in Japanese, you can ask like this.
-
-    ![](../../beginner/images/2026-07-04-07-33-52.png)
-
-    From this point on, the conversation should continue in Japanese.
-
-    ![](../../beginner/images/2026-07-04-07-34-56.png)
-
+    Instead of picking an option, you can also answer in your own words in the chat box below ("Or reply directly…").
     </Aside>
 
-1. The environment has been created. Next, click "Next: Start session".
+1. The environment to be created (name and network settings) is proposed. Click "Create environment".
 
-    ![](../../beginner/images/2026-07-04-07-44-22.png)
+    ![](../../beginner/images/2026-10-27-env-confirm.jpg)
 
-</Steps>
+1. The environment has been created. Next, click "Start session".
 
-## 3. Test in a Session
+    ![](../../beginner/images/2026-10-27-env-created.jpg)
 
-<Steps>
-
-1. Start a session and run a test. Click "Run test".
-
-    ![](../../beginner/images/2026-07-04-07-45-44.png)
-
-1. The session starts in the preview area on the right. A test message is pre-filled in the chat box, so send it.
-
-    ![](../../beginner/images/2026-07-04-07-47-28.png)
-
-1. The agent is invoked. The chat pane on the left shows the CLI command for the API call (you can switch to Python or TypeScript). The preview area on the right shows the API response.
-
-    ![](../../beginner/images/2026-07-04-07-52-52.png)
-
-1. Switch to the Transcript tab to see the key messages in a readable format.
-
-    ![](../../beginner/images/2026-07-04-07-56-09.png)
-
-1. Click the agent's last message to see the final answer nicely formatted. Click "×" to go back to the previous view.
-
-    ![](../../beginner/images/2026-07-04-07-59-08.png)
+    <Aside>
+    As the message "Nothing runs until you send the first message. This session can use up to $5.00" indicates, test sessions have a budget cap.
+    </Aside>
 
 </Steps>
 
-## 4. Adjust the Agent
+## 4. Test in a Session
 
 <Steps>
 
-1. If you want to adjust the agent's behavior, give instructions in the chat pane on the left.
+1. A "Session" panel opens on the right. A test message is already filled in the chat box, so send it as is (you can edit it first if you like).
 
-    ![](../../beginner/images/2026-07-04-08-02-02.png)
+    ![](../../beginner/images/2026-10-27-session-started.jpg)
 
-1. You may be asked to confirm how the agent should be updated.
+1. The agent starts working. The decomposition into sub-questions and the `web_search` calls are shown in the panel in real time. The chat on the left explains which API endpoint (`POST /v1/sessions/{id}/events`) this message was sent through.
 
-    ![](../../beginner/images/2026-07-04-08-03-23.png)
+    ![](../../beginner/images/2026-10-27-session-running.jpg)
 
-1. The system prompt is updated. You can check it by switching to the "Configuration" tab.
+1. First, the outcome and rubric defined in the template are shown in the panel.
 
-    ![](../../beginner/images/2026-07-04-08-05-55.png)
+    ![](../../beginner/images/2026-10-27-session-rubric.jpg)
+
+1. When the report is finished, it is **graded** against the rubric. If the verdict is "needs revision", the agent takes the feedback and improves the report automatically (there is a limit on the number of iterations).
+
+    ![](../../beginner/images/2026-10-27-session-grading.jpg)
+
+    <Aside type="caution">
+    Each revision consumes tokens. Once you have seen how it works, feel free to click "Stop session" without waiting for the grading loop to finish.
+    </Aside>
 
     <Aside type="tip">
-    You can also edit the YAML in the Configuration tab directly.
+    The "↗" icon at the top right of the panel opens the session's detail page in a new tab. There you can see the full event timeline and the files the agent created (under `/mnt/session/outputs/`).
+
+    ![](../../beginner/images/2026-10-27-session-page.jpg)
     </Aside>
 
-1. To keep testing with your adjustments, click "Stop session" once and then click "Run test" again.
-
-    - Stop session
-        ![](../../beginner/images/2026-08-10-02-29-25.png)
-
-    - Run test
-        ![](../../beginner/images/2026-08-10-02-30-15.png)
-
-1. When you are done adjusting, click "Stop session".
-
-    ![](../../beginner/images/2026-07-04-08-02-35.png)
-
+1. Once you have seen enough, click "Stop session" in the chat on the left.
 
 </Steps>
 
-## 5. Review the Resources You Created
+## 5. Adjust the Agent
 
 <Steps>
 
-1. You can review the agent, environment, and session you created from their respective menus.
+1. If you want to adjust the agent's behavior, send instructions in the chat box on the left, even while the session is running.
+
+    ![](../../beginner/images/2026-10-27-adjust-typed.jpg)
+
+1. The instruction is acknowledged and applied to the agent configuration **after the test session ends**. You can keep testing in the meantime.
+
+    ![](../../beginner/images/2026-10-27-adjust-ack.jpg)
+
+1. Click "Stop session". A summary of the test is shown. You may then be offered a list of candidate fixes (points raised by the grader, or the instruction you sent in chat); check the ones you want applied and submit.
+
+    ![](../../beginner/images/2026-10-27-adjust-options.jpg)
+
+1. The proposed change to the system prompt is shown as a diff. Click "Save version" to save it as a new version.
+
+    ![](../../beginner/images/2026-10-27-adjust-diff.jpg)
+
+    ![](../../beginner/images/2026-10-27-adjust-saved.jpg)
+
+    <Aside type="tip">
+    You can also edit the YAML directly in the "Agent configuration" panel on the right. After saving, open the agent from the "Agents" menu and use the "Configuration" tab to view and edit each version.
+
+    ![](../../beginner/images/2026-10-27-agent-page.jpg)
+    </Aside>
+
+1. To keep testing with the adjusted agent, click "Start session" to launch a new test session.
+
+</Steps>
+
+## 6. Integrate (Call from an Application)
+
+<Steps>
+
+1. After you stop the session, you are asked "What do you want to do with this agent?". Select "Call from an application".
+
+    ![](../../beginner/images/2026-10-27-session-stopped.jpg)
+
+1. Sample code for creating a session, sending a message, and streaming events is shown (switchable between cURL, Python, and TypeScript). This gives you an overview of the API you will use from the intermediate section onward. "Export as code" lets you download the agent definition as files. When you are done, click "Finish".
+
+    ![](../../beginner/images/2026-10-27-integrate-code.jpg)
+
+</Steps>
+
+## 7. Review the Resources You Created
+
+<Steps>
+
+1. You can review the agent, environment, and session you created from the submenus of the "Agents" menu.
 
     * Agents
 
-    ![](../../beginner/images/2026-07-04-08-09-13.png)
+    ![](../../beginner/images/2026-10-27-agents-list.jpg)
 
     * Environments
 
-    ![](../../beginner/images/2026-07-04-08-09-46.png)
+    ![](../../beginner/images/2026-10-27-environments-list.jpg)
 
     * Sessions
 
-    ![](../../beginner/images/2026-07-04-08-10-31.png)
+    ![](../../beginner/images/2026-10-27-sessions-list.jpg)
 
 
 </Steps>
 
 ## Summary
 
-- Just by picking a template, you experienced the basic flow of **agent → environment → session** end to end.
-- An agent is really just a configuration (YAML) that defines its model, system prompt, and tools. You can view and edit it anytime in the "Configuration" tab.
+- Just by picking a template, you experienced the basic **agent → environment → session** flow.
+- An agent is really just a configuration (YAML) that defines the model, system prompt, and tools. You can view and edit it anytime in the "Configuration" tab of the agent's page.
 - In the environment, you configured the sandbox's network access.
-- When you want to change the agent's behavior, simply give instructions in the chat and the system prompt is updated for you.
+- When a template defines an **outcome**, the session's output is graded automatically against a rubric, and the agent improves it on its own until it meets the bar.
+- Changing the model or adjusting the agent's behavior is as simple as asking in chat: a proposed change is shown and can be saved as a new version (instructions sent during a test are applied after the test ends).
+- The default model is `claude-opus-5-5`. Test sessions cost money, so switch models when appropriate.
 
 <ShareOnX />

@@ -36,6 +36,10 @@ Managed Agentsはこの4つを押さえれば理解できます。今日のハ�
 | **セッション(Session)** | 環境内で実行中のエージェントのインスタンス。タスクを実行し、成果物を生成する |
 | **イベント(Event)** | アプリケーションとエージェントの間で交換されるメッセージ（ユーザーメッセージ、ツール実行の通知、ステータス更新など） |
 
+![Claude Managed Agentsの4つの概念](images/2026-10-28-concepts.svg)
+
+アプリケーションはセッションに**イベント**を送り、セッションは**エージェント**（何をするか）を**環境**（どこで動くか）の中で実行して、結果をイベントとして返します。
+
 参考: [エージェント](https://platform.claude.com/docs/ja/managed-agents/agent-setup)・[環境](https://platform.claude.com/docs/ja/managed-agents/environments)・[セッション](https://platform.claude.com/docs/ja/managed-agents/sessions)・[イベント](https://platform.claude.com/docs/ja/managed-agents/events-and-streaming)
 
 ## 動作の流れ
@@ -83,7 +87,7 @@ Managed Agentsはこの4つを押さえれば理解できます。今日のハ�
 
 ## セッションはコンソールでリアルタイムで確認
 
-セッションを作成すると、Claude Platformのコンソールにトレースビューが用意されます。エージェントがどんなツールをどんな引数で呼んだのか、リアルタイムで確認できます。セッションIDが分かれば次のURLで開けるので、**ターミナルとコンソールの両方を並べて眺める**のがおすすめです。
+セッションを作成すると、Claude Platformのコンソール（「エージェント」メニュー →「セッション」）にトレースビューが用意されます。エージェントがどんなツールをどんな引数で呼んだのか、リアルタイムで確認できます。セッションIDが分かれば次のURLで開けるので、**ターミナルとコンソールの両方を並べて眺める**のがおすすめです。
 
 ```text
 https://platform.claude.com/workspaces/default/sessions/{セッションID}
@@ -99,9 +103,11 @@ https://platform.claude.com/workspaces/default/sessions/{セッションID}
 
     | モデル | 入力 / 1Mトークン | 出力 / 1Mトークン |
     | --- | --- | --- |
-    | Claude Opus 4.8 (`claude-opus-4-8`) | $5.00 | $25.00 |
-    | Claude Sonnet 5 (`claude-sonnet-5`) | $3.00（2026-08-31まで$2.00） | $15.00（同$10.00） |
+    | Claude Opus 5.5 (`claude-opus-5-5`) | $4.00 | $20.00 |
+    | Claude Sonnet 5 (`claude-sonnet-5`) | $2.00 | $10.00 |
     | Claude Haiku 4.5 (`claude-haiku-4-5`) | $1.00 | $5.00 |
+
+    コンソールのテンプレートやチャットで生成されるエージェントは、既定で`claude-opus-5-5`を使います。
 
 2. セッションの稼働時間（1時間あたり$0.08）
 

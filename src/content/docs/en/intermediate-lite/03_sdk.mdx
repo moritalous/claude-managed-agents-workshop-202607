@@ -1,0 +1,392 @@
+---
+title: 3. Create an Agent with the SDK
+description: A tutorial that creates the AZ-900 practice-question agent, which uses the authless Microsoft Learn MCP server, with Python and the Claude SDK, and chats with it.
+sidebar:
+  order: 3
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import ShareOnX from '../../../../components/ShareOnX.astro';
+
+We will create an agent using Python and the Claude SDK (the `anthropic` package). We use `uv` for the Python runtime environment throughout.
+
+<Aside>
+For authentication, the SDK automatically uses the login credentials from `ant auth login` in [2. Create an Agent with the CLI](/en/intermediate-lite/02_ant/), so no setup is needed on this page. If you want to authenticate with an API key, see [4. Appendix: Issuing and Using API Keys](/en/intermediate/04_apikey/).
+</Aside>
+
+<Aside>
+All the code on this page makes calls through `beta`, as in `client.beta.environments.create(...)`. For the same reason that the CLI commands started with `beta:`, the Managed Agents API, which is provided as a beta, is separated into the `client.beta` namespace in the SDK. Calling through `beta` is how you opt in to the beta, and the SDK sends the required `anthropic-beta: managed-agents-2026-04-01` header for you.
+</Aside>
+
+## 1. Install uv
+
+<Steps>
+
+1. Install [uv](https://docs.astral.sh/uv/).
+
+    <Tabs syncKey="os">
+
+    <TabItem label="Windows">
+    Run the following in PowerShell.
+
+    ```shell
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+    ```
+    </TabItem>
+
+    <TabItem label="macOS">
+    Run the following in Terminal.
+
+    ```shell
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
+    </TabItem>
+
+    </Tabs>
+
+1. **Reopen** your terminal (or PowerShell), then verify the installation.
+
+    ```shell
+    uv --version
+    ```
+
+    You should see a version such as `uv 0.11.6`.
+
+</Steps>
+
+## 2. Create a Project
+
+<Steps>
+
+1. Create a project and move into its folder.
+
+    ```shell
+    uv init quiz-agent
+    cd quiz-agent
+    ```
+
+1. Install the Claude SDK.
+
+    ```shell
+    uv add anthropic
+    ```
+
+</Steps>
+
+## 3. Create the Resources
+
+The environment and agent are "create once, reuse" resources, so we put their creation in a setup script. The contents match what you built from the UI in [1. Create an Agent in the Console](/en/intermediate-lite/01_console/), with "-sdk" appended to the names. Since the MCP server is authless, there is no credential vault to create.
+
+<Steps>
+
+1. In the project folder, create `setup.py` with the following contents.
+
+    ```python title="setup.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # 1. Create an environment (allow network access to MCP servers)
+    ###############################
+    environment = client.beta.environments.create(
+        name="Quiz-environment-sdk",
+        config={
+            "type": "cloud",
+            "networking": {"type": "limited", "allow_mcp_servers": True},
+        },
+    )
+    print(f"environment: {environment.id}")
+
+    ###############################
+    # 2. Create an agent
+    ###############################
+    SYSTEM_PROMPT = """You are a study assistant that creates AZ-900 (Azure Fundamentals) practice questions using the Microsoft Learn MCP server. Refer to the latest official Microsoft Learn documentation and ask multiple-choice questions one at a time.
+
+    Rules:
+    - After presenting the question and the options, do not reveal the correct answer until the user responds.
+    - After the user answers, say whether they were right and give a one-line explanation of why each option is correct or incorrect.
+    - Provide three real Microsoft Learn documentation URLs that are useful for further study.
+    - Remember the user's previous answers (correct/incorrect, topic) within the conversation and prioritize topics they got wrong or are weak in for the next question.
+    - Ask only one question at a time and keep a brisk pace."""
+
+    agent = client.beta.agents.create(
+        name="AZ-900 Quiz Agent SDK",
+        model={"id": "claude-haiku-4-5", "speed": "standard"},
+        description="A study assistant that asks AZ-900 (Azure Fundamentals) practice questions using up-to-date information from the Microsoft Learn MCP server.",
+        system=SYSTEM_PROMPT,
+        mcp_servers=[
+            {
+                "name": "microsoft-learn",
+                "type": "url",
+                "url": "https://learn.microsoft.com/api/mcp",
+            }
+        ],
+        tools=[
+            {
+                "type": "mcp_toolset",
+                "mcp_server_name": "microsoft-learn",
+                "default_config": {
+                    "enabled": True,
+                    "permission_policy": {"type": "always_allow"},
+                },
+            }
+        ],
+    )
+    print(f"agent:       {agent.id}")
+
+    ###############################
+    # Save the IDs to a file (used by run.py / chat.py)
+    ###############################
+    with open("ids.json", "w") as f:
+        json.dump(
+            {
+                "environment_id": environment.id,
+                "agent_id": agent.id,
+            },
+            f,
+            indent=2,
+        )
+    print("Saved the IDs to ids.json")
+    ```
+
+1. Run the script.
+
+    ```shell
+    uv run setup.py
+    ```
+
+    The IDs of the created resources are printed, like this:
+
+    ```text
+    environment: env_018fgtuvYobdrA98ty299UpD
+    agent:       agent_018ZmPdCappkAQ5g3nc444To
+    Saved the IDs to ids.json
+    ```
+
+    <Aside type="caution">
+    The basic pattern for agents is "create once, then refer to it by ID". This script saves the IDs to `ids.json`, and the next scripts load them. Run `setup.py` only once (running it again fails because the environment name already exists).
+    </Aside>
+
+</Steps>
+
+## 4. Invoke the Agent
+
+Creating a session and talking to the agent go in a script you run each time.
+
+<Steps>
+
+1. In the project folder, create `run.py` with the following contents.
+
+    ```python title="run.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # Load the IDs saved by setup.py
+    ###############################
+    with open("ids.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # 1. Create a session (combine the agent and environment; no vault needed)
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+    )
+    print(f"session: {session.id}")
+
+    ###############################
+    # 2. Open the event stream first (so no events are missed)
+    ###############################
+    stream = client.beta.sessions.events.stream(session_id=session.id)
+
+    ###############################
+    # 3. Send a message
+    ###############################
+    client.beta.sessions.events.send(
+        session.id,
+        events=[
+            {
+                "type": "user.message",
+                "content": [{"type": "text", "text": "Give me one AZ-900 practice question"}],
+            }
+        ],
+    )
+    print("Message sent. Waiting for a response...\n")
+
+    ###############################
+    # 4. Print events as they arrive
+    ###############################
+    for event in stream:
+        if event.type == "agent.mcp_tool_use":
+            print(f"[tool call: {event.name}]")
+        elif event.type == "agent.message":
+            for block in event.content:
+                if block.type == "text":
+                    print(block.text)
+        elif event.type == "session.status_idle":
+            if event.stop_reason.type != "requires_action":
+                break
+        elif event.type == "session.status_terminated":
+            break
+
+    stream.close()
+    print("\nDone")
+    ```
+
+    <Aside>
+    Only events that occur after you connect flow through the stream, so the key is to **open the stream before sending the message**. Receiving ends once the agent is waiting for input (`session.status_idle`).
+    </Aside>
+
+1. Run the script.
+
+    ```shell
+    uv run run.py
+    ```
+
+    After the tool call, the question is printed in real time.
+
+    ```text
+    session: sesn_01CCczZDALAHspEXUqx9rhFQ
+    Message sent. Waiting for a response...
+
+    [tool call: microsoft_docs_search]
+    Here is an AZ-900 practice question (topic: cloud concepts - shared responsibility model)
+
+    Question
+    A company is planning to migrate an on-premises business application to Azure. ...
+
+    A. ...
+    B. ...
+    C. ...
+    D. ...
+
+    Choose one answer from A to D.
+
+    Done
+    ```
+
+1. Running `run.py` again starts a new session with the same agent. You can also review the resources and session exchanges from the console menus.
+
+</Steps>
+
+## 5. Continue the Conversation
+
+`run.py` ends after a single exchange, so it stops right after the question is asked. Sessions are stateful, so **keep sending messages to the same session and the conversation continues**. Let's build an interactive version that goes question → answer → verdict → next question.
+
+<Steps>
+
+1. In the project folder, create `chat.py` with the following contents.
+
+    ```python title="chat.py"
+    import json
+
+    from anthropic import Anthropic
+
+    client = Anthropic()
+
+    ###############################
+    # Load the IDs saved by setup.py
+    ###############################
+    with open("ids.json") as f:
+        ids = json.load(f)
+
+    ###############################
+    # Create just one session at the start (keep sending to it and the conversation continues)
+    ###############################
+    session = client.beta.sessions.create(
+        agent=ids["agent_id"],
+        environment_id=ids["environment_id"],
+    )
+    print(f"session: {session.id}")
+    print("Chat with the agent. Type exit to quit.\n")
+
+    while True:
+        user_input = input("you> ").strip()
+        if user_input == "exit":
+            break
+        if not user_input:
+            continue
+
+        ###############################
+        # Open the stream, then send the message
+        ###############################
+        stream = client.beta.sessions.events.stream(session_id=session.id)
+        client.beta.sessions.events.send(
+            session.id,
+            events=[
+                {
+                    "type": "user.message",
+                    "content": [{"type": "text", "text": user_input}],
+                }
+            ],
+        )
+
+        ###############################
+        # Print events until the agent is waiting for input
+        ###############################
+        for event in stream:
+            if event.type == "agent.mcp_tool_use":
+                print(f"[tool call: {event.name}]")
+            elif event.type == "agent.message":
+                for block in event.content:
+                    if block.type == "text":
+                        print(block.text)
+            elif event.type == "session.status_idle":
+                if event.stop_reason.type != "requires_action":
+                    break
+            elif event.type == "session.status_terminated":
+                break
+        stream.close()
+        print()
+    ```
+
+    <Aside>
+    The session is created once, **outside** the loop; each turn is "open the stream → send → receive until idle". The conversation history is kept on the session side, so the client does not need to manage it.
+    </Aside>
+
+1. Run the script and answer the question. After the verdict, send "next" to get the next question.
+
+    ```shell
+    uv run chat.py
+    ```
+
+    ```text
+    session: sesn_01UDB8UgiKxoFr1myDyGfjf2
+    Chat with the agent. Type exit to quit.
+
+    you> Give me one AZ-900 practice question
+    [tool call: microsoft_docs_search]
+    Here is an AZ-900 practice question (topic: cloud concepts - shared responsibility model)
+    ...
+    Choose one answer from A to D.
+
+    you> C
+    Correct! The answer is C.
+    ...
+    Score so far: 1 of 1 correct
+
+    you> next
+    [tool call: microsoft_docs_search]
+    Question 2 ...
+
+    you> exit
+    ```
+
+</Steps>
+
+## Summary
+
+- You built the same setup as the console and CLI with the Python SDK. With an authless MCP server, there is no vault to create or attach to the session.
+- The basic pattern is to separate resource creation (`setup.py`) from execution (`run.py`) and pass IDs through `ids.json`.
+- **Open the stream before sending** events, and stop receiving at `session.status_idle`.
+- Sessions are stateful, so simply keep sending to the same session and the "question → answer → verdict" conversation continues (`chat.py`). No history management is needed on the client.
+
+<ShareOnX />
